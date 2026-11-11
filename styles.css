@@ -363,3 +363,6 @@ html[lang="en"] .fld>.el,html[lang="el"] .fld>.en{display:none}
 .g-all{display:inline-flex;align-items:center;gap:6px}
 .gwrap .g-all{justify-content:center}
 .qas{align-items:start}
+
+.qas{grid-template-columns:1fr !important;max-width:860px}
+.qa{align-self:start}
