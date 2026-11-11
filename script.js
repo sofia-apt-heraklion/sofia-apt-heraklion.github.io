@@ -54,18 +54,82 @@ function open(list, i) {
   set = list; show(i);
   if (typeof lb.showModal === "function") lb.showModal(); else lb.setAttribute("open", "");
 }
+/* ---------- photo tour by room ---------- */
+const ROOMS = {
+  living: ["Living room", "Σαλόνι"], kitchen: ["Kitchen & dining", "Κουζίνα & τραπεζαρία"], entrance: ["Entrance & hallway", "Είσοδος & διάδρομος"],
+  bedroom: ["Bedroom", "Υπνοδωμάτιο"], master: ["Master bedroom", "Κύριο υπνοδωμάτιο"], bed2: ["Second bedroom", "Δεύτερο υπνοδωμάτιο"],
+  bath: ["Bathroom", "Μπάνιο"], balcony: ["Balcony", "Μπαλκόνι"], plan: ["Floor plan", "Κάτοψη"]
+};
+const ORDER = ["living", "kitchen", "entrance", "bedroom", "master", "bed2", "bath", "balcony", "plan"];
+const tour = document.getElementById("tour");
+const tourBody = document.getElementById("tourBody"), tourChips = document.getElementById("tourChips");
+const L = (k) => (document.documentElement.lang === "el" ? ROOMS[k][1] : ROOMS[k][0]);
+function tourList(g) {
+  const imgs = [...g.querySelectorAll("img")];
+  return ORDER.flatMap((r) => imgs.filter((i) => i.dataset.room === r));
+}
+function openTour(g, room) {
+  const list = tourList(g);
+  document.getElementById("tourTitle").textContent = g.dataset.gallery ? "Sofia " + g.dataset.gallery : "";
+  tourBody.innerHTML = ""; tourChips.innerHTML = "";
+  ORDER.forEach((r) => {
+    const items = list.filter((i) => i.dataset.room === r);
+    if (!items.length) return;
+    const chip = document.createElement("button");
+    chip.type = "button"; chip.className = "tchip";
+    chip.innerHTML = `<img src="${items[0].src}" alt="" loading="lazy"><span>${L(r)}</span>`;
+    chip.addEventListener("click", () => document.getElementById("room-" + r).scrollIntoView({ behavior: "smooth", block: "start" }));
+    tourChips.appendChild(chip);
+    const sec = document.createElement("section");
+    sec.className = "troom"; sec.id = "room-" + r;
+    sec.innerHTML = `<h4>${L(r)} <small>${items.length}</small></h4><div class="tgrid${r === "plan" ? " one" : ""}"></div>`;
+    const grid = sec.querySelector(".tgrid");
+    items.forEach((img) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "tph";
+      const im = document.createElement("img"); im.src = img.src; im.decoding = "async"; im.alt = img.alt; im.loading = "lazy";
+      b.appendChild(im);
+      b.addEventListener("click", () => open(list.map((x) => ({ src: x.dataset.full || x.src, alt: `${L(x.dataset.room)} · ${x.alt}` })), list.indexOf(img)));
+      grid.appendChild(b);
+    });
+    tourBody.appendChild(sec);
+  });
+  if (typeof tour.showModal === "function") tour.showModal(); else tour.setAttribute("open", "");
+  document.body.style.overflow = "hidden";
+  tourBody.scrollTop = 0;
+  if (room) setTimeout(() => { const t = document.getElementById("room-" + room); if (t) t.scrollIntoView({ block: "start" }); }, 30);
+}
+tour.addEventListener("close", () => (document.body.style.overflow = ""));
+tour.querySelector(".tour-close").addEventListener("click", () => tour.close());
 document.querySelectorAll(".gallery").forEach((g) => {
   const imgs = [...g.querySelectorAll("img")];
-  imgs.forEach((img, i) => img.addEventListener("click", () => open(imgs, i)));
-  g.querySelector(".g-all").addEventListener("click", () => open(imgs, 0));
+  imgs.forEach((img) => img.addEventListener("click", () => openTour(g, img.dataset.room)));
+  g.closest(".gwrap").querySelector(".g-all").addEventListener("click", () => openTour(g));
 });
-document.querySelectorAll("[data-zoom]").forEach((img) => img.addEventListener("click", () => open([img], 0)));
+/* ---------- interactive floor plans ---------- */
+document.querySelectorAll("[data-plan]").forEach((fig) => {
+  const apt = fig.dataset.plan;
+  const g = document.querySelector(`.gallery[data-gallery="${apt}"]`);
+  const img = fig.querySelector(".planwrap img");
+  const zones = [...fig.querySelectorAll(".pz")];
+  const hl = (room, on) => zones.forEach((z) => z.classList.toggle("hot", on && z.dataset.planRoom === room));
+  fig.querySelectorAll("[data-plan-room]").forEach((el) => {
+    const room = el.dataset.planRoom;
+    el.addEventListener("mouseenter", () => hl(room, true));
+    el.addEventListener("mouseleave", () => hl(room, false));
+    el.addEventListener("focus", () => hl(room, true));
+    el.addEventListener("blur", () => hl(room, false));
+    el.addEventListener("click", () => openTour(g, room));
+  });
+  fig.querySelector(".plan-zoom").addEventListener("click", () => open([{ src: img.src, alt: img.alt }], 0));
+});
 lb.querySelector(".lb-close").addEventListener("click", () => lb.close());
 lb.querySelector(".lb-prev").addEventListener("click", () => show(idx - 1));
 lb.querySelector(".lb-next").addEventListener("click", () => show(idx + 1));
 lb.addEventListener("click", (e) => { if (e.target === lb || e.target.tagName === "FIGURE") lb.close(); });
 document.addEventListener("keydown", (e) => {
   if (!lb.open) return;
+  if (e.key === "Escape") { e.preventDefault(); lb.close(); return; }
   if (e.key === "ArrowRight") show(idx + 1);
   if (e.key === "ArrowLeft") show(idx - 1);
 });
@@ -102,7 +166,7 @@ document.querySelectorAll(".reveal, .reveal-stagger").forEach((el) => io ? io.ob
 /* ---------- mobile gallery counter ---------- */
 document.querySelectorAll(".gallery").forEach((g) => {
   const imgs = [...g.querySelectorAll("img")];
-  const c = g.querySelector(".g-count");
+  const c = g.closest(".gwrap").querySelector(".g-count");
   const upd = () => {
     const i = Math.round(g.scrollLeft / (imgs[1] ? imgs[1].offsetLeft - imgs[0].offsetLeft : 1));
     c.textContent = `${Math.min(i + 1, imgs.length)} / ${imgs.length}`;
