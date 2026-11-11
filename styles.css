@@ -362,3 +362,4 @@ html[lang="en"] .fld>.el,html[lang="el"] .fld>.en{display:none}
 .more li .ic{color:var(--accent)}
 .g-all{display:inline-flex;align-items:center;gap:6px}
 .gwrap .g-all{justify-content:center}
+.qas{align-items:start}
