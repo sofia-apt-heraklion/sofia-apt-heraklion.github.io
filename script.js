@@ -274,3 +274,42 @@ let deferred = null; const installBtn = document.getElementById("installBtn");
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e; installBtn.hidden = false; });
 installBtn.addEventListener("click", async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; installBtn.hidden = true; });
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+
+/* ---------- favourite places ---------- */
+(function () {
+  const P = window.PLACES || [];
+  const grid = document.getElementById("fgrid"), more = document.getElementById("fmore");
+  if (!grid) return;
+  const ICON = { cafe: "cup", food: "fork", drinks: "glass", sweet: "icecream", sights: "landmark", beach: "beach", daily: "bag" };
+  const LIMIT = 12; let cat = "all", expanded = false;
+  document.querySelectorAll(".ftab").forEach((b) => {
+    const n = b.dataset.cat === "all" ? new Set(P.map((p) => p[1])).size : P.filter((p) => p[0] === b.dataset.cat).length;
+    b.querySelector("small").textContent = n;
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".ftab").forEach((x) => x.classList.toggle("on", x === b));
+      cat = b.dataset.cat; expanded = false; render();
+    });
+  });
+  function render() {
+    const el = document.documentElement.lang === "el";
+    let list;
+    if (cat === "all") { // mix categories so the first cards show a bit of everything
+      const by = {}; P.forEach((p) => (by[p[0]] = by[p[0]] || []).push(p));
+      const keys = Object.keys(by), seen = new Set(); list = [];
+      for (let i = 0; keys.some((k) => by[k][i]); i++) keys.forEach((k) => { const p = by[k][i]; if (p && !seen.has(p[1])) { seen.add(p[1]); list.push(p); } });
+    } else list = P.filter((p) => p[0] === cat);
+    const shown = expanded ? list : list.slice(0, LIMIT);
+    grid.innerHTML = shown.map((p) => {
+      const q = encodeURIComponent(p[1] + ", Heraklion");
+      const r = p[4] && p[4] !== "—" ? `<span class="frate"><svg class="ic"><use href="#i-star"/></svg>${p[4]}</span>` : "";
+      return `<a class="fcard" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">
+        <span class="fic"><svg class="ic"><use href="#i-${ICON[p[0]]}"/></svg></span>
+        <span class="ftxt"><b>${p[1]}</b><small>${el ? p[3] : p[2]}</small></span>${r}
+        <svg class="ic fgo"><use href="#i-ext"/></svg></a>`;
+    }).join("");
+    more.hidden = expanded || list.length <= LIMIT;
+  }
+  more.addEventListener("click", () => { expanded = true; render(); });
+  document.getElementById("langToggle").addEventListener("click", () => setTimeout(render, 0));
+  render();
+})();
