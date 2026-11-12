@@ -82,14 +82,17 @@ function openTour(g, room) {
     tourChips.appendChild(chip);
     const sec = document.createElement("section");
     sec.className = "troom"; sec.id = "room-" + r;
-    sec.innerHTML = `<h4>${L(r)} <small>${items.length}</small></h4><div class="tgrid${r === "plan" ? " one" : ""}"></div>`;
+    sec.innerHTML = `<h4>${L(r)}</h4><div class="tgrid${r === "plan" ? " one" : ""}"></div>`;
     const grid = sec.querySelector(".tgrid");
     items.forEach((img) => {
       const b = document.createElement("button");
       b.type = "button"; b.className = "tph";
       const im = document.createElement("img"); im.src = img.src; im.decoding = "async"; im.alt = img.alt; im.loading = "lazy";
       b.appendChild(im);
-      b.addEventListener("click", () => open(list.map((x) => ({ src: x.dataset.full || x.src, alt: `${L(x.dataset.room)} · ${x.alt}` })), list.indexOf(img)));
+      b.addEventListener("click", () => {
+        if (r === "plan" && g.dataset.gallery && document.querySelector(`[data-plan="${g.dataset.gallery}"]`)) return openPlan(g.dataset.gallery);
+        open(list.map((x) => ({ src: x.dataset.full || x.src, alt: `${L(x.dataset.room)} · ${x.alt}` })), list.indexOf(img));
+      });
       grid.appendChild(b);
     });
     tourBody.appendChild(sec);
@@ -121,8 +124,46 @@ document.querySelectorAll("[data-plan]").forEach((fig) => {
     el.addEventListener("blur", () => hl(room, false));
     el.addEventListener("click", () => openTour(g, room));
   });
-  fig.querySelector(".plan-zoom").addEventListener("click", () => open([{ src: img.src, alt: img.alt }], 0));
+  fig.querySelector(".plan-zoom").addEventListener("click", () => openPlan(apt));
+  img.style.cursor = "zoom-in";
 });
+
+/* ---------- enlarged interactive floor plan ---------- */
+const planbox = document.getElementById("planbox");
+function openPlan(apt) {
+  const fig = document.querySelector(`[data-plan="${apt}"]`);
+  if (!fig || !planbox) return;
+  const g = document.querySelector(`.gallery[data-gallery="${apt}"]`);
+  const src = fig.querySelector(".planwrap img");
+  const stage = planbox.querySelector(".pb-stage"), chipsBox = planbox.querySelector(".pb-chips");
+  const wrap = fig.querySelector(".planwrap").cloneNode(true);
+  wrap.classList.add("pb-wrap");
+  const im = wrap.querySelector("img");
+  im.removeAttribute("loading"); im.style.cursor = "default";
+  wrap.style.setProperty("--ar", (src.naturalWidth || +src.getAttribute("width")) / (src.naturalHeight || +src.getAttribute("height")));
+  stage.innerHTML = ""; stage.appendChild(wrap);
+  chipsBox.innerHTML = ""; chipsBox.appendChild(fig.querySelector(".plan-chips").cloneNode(true));
+  planbox.querySelector(".pb-title b").textContent = "Sofia " + apt;
+  const zones = [...wrap.querySelectorAll(".pz")];
+  const hl = (room, on) => zones.forEach((z) => z.classList.toggle("hot", on && z.dataset.planRoom === room));
+  planbox.querySelectorAll("[data-plan-room]").forEach((el) => {
+    const room = el.dataset.planRoom;
+    el.addEventListener("mouseenter", () => hl(room, true));
+    el.addEventListener("mouseleave", () => hl(room, false));
+    el.addEventListener("focus", () => hl(room, true));
+    el.addEventListener("blur", () => hl(room, false));
+    el.addEventListener("click", () => { planbox.close(); if (tour.open) tour.close(); openTour(g, room); });
+  });
+  if (typeof planbox.showModal === "function") planbox.showModal(); else planbox.setAttribute("open", "");
+  document.body.style.overflow = "hidden";
+}
+if (planbox) {
+  planbox.querySelector(".pb-close").addEventListener("click", () => planbox.close());
+  planbox.addEventListener("close", () => { if (!tour.open) document.body.style.overflow = ""; });
+  planbox.addEventListener("click", (e) => { if (e.target === planbox || e.target.classList.contains("pb-inner") || e.target.classList.contains("pb-stage")) planbox.close(); });
+}
+document.querySelectorAll("[data-plan] .planwrap img").forEach((im) =>
+  im.addEventListener("click", () => openPlan(im.closest("[data-plan]").dataset.plan)));
 lb.querySelector(".lb-close").addEventListener("click", () => lb.close());
 lb.querySelector(".lb-prev").addEventListener("click", () => show(idx - 1));
 lb.querySelector(".lb-next").addEventListener("click", () => show(idx + 1));
