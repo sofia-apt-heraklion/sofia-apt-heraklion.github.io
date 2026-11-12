@@ -602,3 +602,7 @@ html[lang="en"] .fld>.el,html[lang="el"] .fld>.en{display:none}
 .menu-btn,.icon-btn,.lang{flex-shrink:0}
 @media (max-width:420px){.nav{gap:10px}}
 .ftxt b{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3}
+.rv-nav{flex-wrap:wrap}
+.rv-google{margin-left:auto}
+.rv-google .ic{color:var(--accent);width:16px;height:16px;margin-right:6px}
+@media (max-width:620px){.rv-google{margin-left:0;width:100%;justify-content:center}}
