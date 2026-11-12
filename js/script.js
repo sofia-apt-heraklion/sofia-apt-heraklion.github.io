@@ -227,6 +227,7 @@ lb.addEventListener("touchend", (e) => {
 
 /* ---------- quick actions ---------- */
 document.querySelectorAll("[data-tel]").forEach((a) => (a.href = "tel:" + PHONE));
+document.querySelectorAll("[data-sms]").forEach((a) => (a.href = "sms:" + PHONE));
 document.querySelectorAll("[data-viber]").forEach((a) => (a.href = "viber://chat?number=" + encodeURIComponent(PHONE)));
 document.querySelectorAll("[data-directions]").forEach((a) => (a.href = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(ADDRESS)));
 document.querySelectorAll("[data-mail]").forEach((a) => a.addEventListener("click", (e) => {
@@ -289,7 +290,7 @@ form.addEventListener("submit", (e) => {
 
 /* ---------- vCard ---------- */
 document.getElementById("vcardBtn").addEventListener("click", () => {
-  const v = ["BEGIN:VCARD", "VERSION:3.0", "N:;Sofia Apartments;;;", "FN:Sofia Apartments · Heraklion", "TEL;TYPE=CELL:" + PHONE, "NOTE:Viber " + PHONE + ". Check-in from 15:00, check-out 11:00.", "EMAIL:" + EMAIL,
+  const v = ["BEGIN:VCARD", "VERSION:3.0", "N:;Sofia Apartments;;;", "FN:Sofia Apartments · Heraklion", "TEL;TYPE=CELL:" + PHONE, "NOTE:Bookings by email preferred. SMS or Viber " + PHONE + " also welcome. Check-in from 15:00, check-out 11:00.", "EMAIL:" + EMAIL,
     "ADR;TYPE=WORK:;;Athinas 26;Heraklion;Crete;;Greece", "URL:" + location.href.split("#")[0], "END:VCARD"].join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([v], { type: "text/vcard" }));
