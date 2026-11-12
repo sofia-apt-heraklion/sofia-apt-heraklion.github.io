@@ -445,3 +445,116 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   const lt = document.getElementById("langToggle");
   if (lt) lt.addEventListener("click", () => setTimeout(() => { list(); hide(); }, 0));
 })();
+
+/* ---------- availability calendar (synced from Airbnb via availability.json) ---------- */
+(function () {
+  const cal = document.getElementById("cal");
+  if (!cal || !form) return;
+  const msgEl = document.getElementById("calMsg"), upd = document.getElementById("calUpd");
+  const months = cal.querySelector(".cal-months"), titles = cal.querySelector(".cal-titles");
+  const pad = (n) => String(n).padStart(2, "0");
+  const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+  const el = () => document.documentElement.lang === "el";
+  const T0 = new Date(); T0.setHours(0, 0, 0, 0);
+  let data = null, view = new Date(T0.getFullYear(), T0.getMonth(), 1), selA = null, selB = null;
+
+  // booked nights per apartment, as a Set of "YYYY-MM-DD"
+  const nightsOf = (apt) => {
+    const out = new Set(); if (!data) return out;
+    const keys = apt === "Sofia 164" ? ["164"] : apt === "Sofia 264" ? ["264"] : ["164", "264"];
+    keys.forEach((k) => (data[k] || []).forEach(([a, b]) => { for (let d = parse(a); d < parse(b); d.setDate(d.getDate() + 1)) out.add(key(d)); }));
+    return out;
+  };
+  const apt = () => form.elements["apt"].value;
+  const perView = () => (matchMedia("(max-width:620px)").matches ? 1 : 2);
+
+  function render() {
+    const busy = nightsOf(apt()), n = perView(), lang = el() ? "el-GR" : "en-GB";
+    const wd = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(lang, { weekday: "narrow" }));
+    let html = "", tt = "";
+    for (let m = 0; m < n; m++) {
+      const first = new Date(view.getFullYear(), view.getMonth() + m, 1);
+      const name = first.toLocaleDateString(lang, { month: "long", year: "numeric" });
+      tt += `<b>${name}</b>`;
+      html += `<div class="cal-m"><div class="cal-mname">${name}</div><div class="cal-g">${wd.map((w) => `<span class="cal-w">${w}</span>`).join("")}`;
+      const lead = (first.getDay() + 6) % 7;
+      for (let i = 0; i < lead; i++) html += "<span></span>";
+      const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+      for (let d = 1; d <= days; d++) {
+        const dt = new Date(first.getFullYear(), first.getMonth(), d), k = key(dt);
+        const prev = new Date(dt); prev.setDate(d - 1);
+        const past = dt < T0, b = busy.has(k);
+        const turn = !b && busy.has(key(prev));      // a guest leaves this morning: free to arrive
+        const cls = ["cal-d"];
+        if (past) cls.push("past"); else if (b) cls.push(busy.has(key(prev)) ? "busy" : "busy start");
+        if (turn && !past) cls.push("turn");
+        if (selA && k === selA) cls.push("sel a");
+        if (selB && k === selB) cls.push("sel b");
+        if (selA && selB && k > selA && k < selB) cls.push("in");
+        if (+dt === +T0) cls.push("today");
+        html += `<button type="button" class="${cls.join(" ")}" data-d="${k}"${past ? " disabled" : ""}>${d}</button>`;
+      }
+      html += "</div></div>";
+    }
+    months.innerHTML = html; titles.innerHTML = tt;
+    cal.querySelector('[data-cal="-1"]').disabled = view <= new Date(T0.getFullYear(), T0.getMonth(), 1);
+    check();
+  }
+  function rangeBusy(a, b) {
+    const busy = nightsOf(apt());
+    for (let d = parse(a); key(d) < b; d.setDate(d.getDate() + 1)) if (busy.has(key(d))) return true;
+    return false;
+  }
+  function say(ok, text) {
+    msgEl.hidden = !text; if (!text) return;
+    msgEl.className = "cal-msg " + (ok ? "ok" : "bad");
+    msgEl.innerHTML = `<svg class="ic"><use href="#i-${ok ? "check" : "alert"}"/></svg>${text}`;
+  }
+  function check() {
+    if (!selA || !selB) return say(true, "");
+    if (!data) return say(true, "");
+    if (rangeBusy(selA, selB)) say(false, el() ? "Κάποιες από αυτές τις νύχτες είναι ήδη κλεισμένες. Δοκιμάστε άλλες ημερομηνίες ή το άλλο διαμέρισμα." : "Some of these nights are already booked. Try other dates or the other apartment.");
+    else say(true, el() ? "Διαθέσιμο για τις ημερομηνίες σας" : "Available for your dates");
+  }
+  function setInputs() {
+    fin.value = selA || ""; fout.value = selB || "";
+    fin.dispatchEvent(new Event("change")); if (selB) { fout.value = selB; fout.dispatchEvent(new Event("change")); }
+  }
+  months.addEventListener("click", (e) => {
+    const b = e.target.closest(".cal-d"); if (!b || b.disabled) return;
+    const k = b.dataset.d, busy = nightsOf(apt());
+    if (!selA || selB || k <= selA) {
+      if (busy.has(k)) { say(false, el() ? "Αυτή η μέρα είναι κλεισμένη για άφιξη." : "This day is booked for arrival."); return; }
+      selA = k; selB = null;
+    } else {
+      selB = k;
+    }
+    syncing = true; setInputs(); syncing = false; render();
+  });
+  cal.querySelectorAll("[data-cal]").forEach((b) => b.addEventListener("click", () => {
+    view = new Date(view.getFullYear(), view.getMonth() + +b.dataset.cal, 1); render();
+  }));
+  let syncing = false;
+  [fin, fout].forEach((f) => f.addEventListener("change", () => {
+    if (syncing) return;
+    selA = fin.value || null; selB = fout.value && fout.value > (fin.value || "") ? fout.value : null;
+    if (selA) { const d = parse(selA); view = new Date(d.getFullYear(), d.getMonth(), 1); }
+    render();
+  }));
+  form.querySelectorAll('input[name="apt"]').forEach((r) => r.addEventListener("change", render));
+  const lt = document.getElementById("langToggle"); if (lt) lt.addEventListener("click", () => setTimeout(render, 0));
+  let rw; addEventListener("resize", () => { clearTimeout(rw); rw = setTimeout(render, 200); });
+
+  function showUpdated() {
+    if (!data || !data.updated) { upd.textContent = ""; return; }
+    upd.textContent = (el() ? "Συγχρονισμός με Airbnb" : "Synced with Airbnb");
+  }
+  render();
+  // fresh copy from GitHub first, then the site's own copy
+  const RAW = "https://raw.githubusercontent.com/sofia-apt-heraklion/sofia-apt-heraklion.github.io/main/availability.json";
+  const get = (u) => fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject()));
+  if (/^https?:/.test(location.protocol) && window.fetch)
+    get(RAW).catch(() => get("availability.json")).then((d) => { data = d; showUpdated(); render(); cal.classList.add("synced"); }).catch(() => {});
+  if (lt) lt.addEventListener("click", () => setTimeout(showUpdated, 0));
+})();

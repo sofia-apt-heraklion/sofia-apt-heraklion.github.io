@@ -1,0 +1,61 @@
+name: Update calendar
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"   # every 3 hours
+  workflow_dispatch:          # "Run workflow" button
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Airbnb calendars
+        env:
+          ICAL_164: ${{ secrets.ICAL_164 }}
+          ICAL_264: ${{ secrets.ICAL_264 }}
+        run: |
+          python3 - <<'PY'
+          import os, json, re, datetime, urllib.request
+          today = datetime.date.today()
+          out = {"updated": today.isoformat()}
+          for apt in ("164", "264"):
+              url = os.environ.get("ICAL_" + apt, "").strip()
+              if not url:
+                  print("No link for", apt); continue
+              req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+              ics = urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "ignore")
+              ics = re.sub(r"\r?\n[ \t]", "", ics)          # unfold long lines
+              ranges = []
+              for ev in ics.split("BEGIN:VEVENT")[1:]:
+                  s = re.search(r"DTSTART[^:]*:(\d{8})", ev)
+                  e = re.search(r"DTEND[^:]*:(\d{8})", ev)
+                  if not s or not e: continue
+                  a = datetime.datetime.strptime(s.group(1), "%Y%m%d").date()
+                  b = datetime.datetime.strptime(e.group(1), "%Y%m%d").date()
+                  if b <= today: continue
+                  ranges.append([a.isoformat(), b.isoformat()])
+              ranges.sort()
+              out[apt] = ranges
+              print(apt, len(ranges), "booked periods")
+          if not any(k in out for k in ("164", "264")):
+              raise SystemExit("No calendar links set")
+          old = {}
+          if os.path.exists("availability.json"):
+              try: old = json.load(open("availability.json"))
+              except Exception: pass
+          for apt in ("164", "264"):              # keep old data if one download failed
+              if apt not in out and apt in old: out[apt] = old[apt]
+          json.dump(out, open("availability.json", "w"), separators=(",", ":"))
+          PY
+
+      - name: Save if changed
+        run: |
+          git config user.name "calendar-bot"
+          git config user.email "calendar-bot@users.noreply.github.com"
+          git add availability.json
+          git diff --cached --quiet || (git commit -m "Update availability" && git push)
