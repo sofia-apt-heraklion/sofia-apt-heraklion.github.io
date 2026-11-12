@@ -665,3 +665,12 @@ html[lang="en"] .fld>.el,html[lang="el"] .fld>.en{display:none}
 .contact .pref-alt{margin-top:10px}
 .contact .pref-alt .btn{padding:9px 18px;font-size:.9rem}
 .contact .pref-alt .ic{margin-right:6px}
+.contact .pref-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:max-content;max-width:100%;margin:0 auto 34px}
+.contact .pref-grid .btn{display:flex;align-items:center;justify-content:center;margin:0;text-align:center}
+.contact .pref-grid .pref-main{grid-column:1/-1}
+.contact .pref-grid .btn.ghost{padding:11px 16px;font-size:.92rem}
+@media (max-width:420px){.contact .pref-grid{width:100%}.contact .pref-grid .pref-main{font-size:.92rem;padding:13px 14px}}
+.contact .pref-grid .btn{gap:8px}.contact .pref-grid .btn .ic{margin:0}
+/* contact: the same 12px gap between every button, in every direction */
+.contact .pref-grid{gap:12px;margin:0 auto 12px}
+.contact .extras{margin-top:0;gap:12px}
