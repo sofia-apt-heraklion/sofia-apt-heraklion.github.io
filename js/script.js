@@ -437,7 +437,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   top.addEventListener("pointerleave", hide);
   list();
   // load the map only when the section gets close
-  const load = () => { if (window.WORLD) return draw(); const s = document.createElement("script"); s.src = "worldmap.js?v=1"; s.onload = draw; document.head.appendChild(s); };
+  const load = () => { if (window.WORLD) return draw(); const s = document.createElement("script"); s.src = "js/worldmap.js?v=2"; s.onload = draw; document.head.appendChild(s); };
   if ("IntersectionObserver" in window) {
     const io = new IntersectionObserver((en) => { if (en.some((x) => x.isIntersecting)) { io.disconnect(); load(); } }, { rootMargin: "600px" });
     io.observe(box);
