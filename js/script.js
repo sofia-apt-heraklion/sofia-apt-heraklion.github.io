@@ -316,43 +316,123 @@ window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); defe
 installBtn.addEventListener("click", async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; installBtn.hidden = true; });
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 
-/* ---------- favourite places ---------- */
+/* ---------- favourite places: list + interactive map ---------- */
 (function () {
-  const P = window.PLACES || [];
-  const grid = document.getElementById("fgrid"), more = document.getElementById("fmore");
-  if (!grid) return;
-  const ICON = { cafe: "cup", food: "fork", drinks: "glass", sweet: "icecream", sights: "landmark", beach: "beach", daily: "bag" };
-  const LIMIT = 12; let cat = "all", expanded = false;
+  const P = window.PLACES || [], HOME = window.HOME || [35.33287, 25.13791];
+  const list = document.getElementById("flist"), mapEl = document.getElementById("fmap");
+  if (!list || !mapEl) return;
+  const CAT = {
+    cafe: { ic: "cup", c: "#9a6b3f" }, food: { ic: "fork", c: "#c25e3a" }, drinks: { ic: "glass", c: "#6a4f8c" },
+    sweet: { ic: "icecream", c: "#c47c93" }, sights: { ic: "landmark", c: "#4f7f78" }, beach: { ic: "beach", c: "#2f7fa6" }, daily: { ic: "bag", c: "#6b6f76" }
+  };
+  const isEl = () => document.documentElement.lang === "el";
+  // unique places (a place can be in two categories, e.g. the bakery)
+  const items = [];
+  P.forEach((p, i) => { if (!items.some((q) => q[1] === p[1] && q[0] === p[0])) items.push({ i, cat: p[0], name: p[1], en: p[2], el: p[3], rate: p[4], lat: p[5], lng: p[6] }); });
+  const R = 6371e3, rad = (d) => (d * Math.PI) / 180;
+  const dist = (a, b) => { const dLa = rad(b[0] - a[0]), dLo = rad(b[1] - a[1]); const x = Math.sin(dLa / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+  items.forEach((it) => (it.d = dist(HOME, [it.lat, it.lng])));
+  const away = (m) => {
+    const walk = Math.max(1, Math.round((m * 1.3) / 80));          // street detour, ~80 m per minute
+    if (m < 1800) return isEl() ? `${walk}′ με τα πόδια` : `${walk} min walk`;
+    const km = m / 1000; return (km < 10 ? km.toFixed(1) : Math.round(km)) + " km";
+  };
+  const gmaps = (it) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.name + ", Heraklion")}`;
+  let cat = "all", map = null, markers = {}, active = null;
+
+  // counters on the tabs
   document.querySelectorAll(".ftab").forEach((b) => {
-    const n = b.dataset.cat === "all" ? new Set(P.map((p) => p[1])).size : P.filter((p) => p[0] === b.dataset.cat).length;
-    b.querySelector("small").textContent = n;
+    b.querySelector("small").textContent = b.dataset.cat === "all" ? new Set(items.map((x) => x.name)).size : items.filter((x) => x.cat === b.dataset.cat).length;
     b.addEventListener("click", () => {
       document.querySelectorAll(".ftab").forEach((x) => x.classList.toggle("on", x === b));
-      cat = b.dataset.cat; expanded = false; render();
+      cat = b.dataset.cat; renderList(); showMarkers(true);
     });
   });
-  function render() {
-    const el = document.documentElement.lang === "el";
-    let list;
-    if (cat === "all") { // mix categories so the first cards show a bit of everything
-      const by = {}; P.forEach((p) => (by[p[0]] = by[p[0]] || []).push(p));
-      const keys = Object.keys(by), seen = new Set(); list = [];
-      for (let i = 0; keys.some((k) => by[k][i]); i++) keys.forEach((k) => { const p = by[k][i]; if (p && !seen.has(p[1])) { seen.add(p[1]); list.push(p); } });
-    } else list = P.filter((p) => p[0] === cat);
-    const shown = expanded ? list : list.slice(0, LIMIT);
-    grid.innerHTML = shown.map((p) => {
-      const q = encodeURIComponent(p[1] + ", Heraklion");
-      const r = p[4] && p[4] !== "—" ? `<span class="frate"><svg class="ic"><use href="#i-star"/></svg>${p[4]}</span>` : "";
-      return `<a class="fcard" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">
-        <span class="fic"><svg class="ic"><use href="#i-${ICON[p[0]]}"/></svg></span>
-        <span class="ftxt"><b>${p[1]}</b><small>${el ? p[3] : p[2]}</small></span>${r}
-        <svg class="ic fgo"><use href="#i-ext"/></svg></a>`;
-    }).join("");
-    more.hidden = expanded || list.length <= LIMIT;
+  const visible = () => {
+    if (cat !== "all") return items.filter((x) => x.cat === cat).sort((a, b) => a.d - b.d);
+    const seen = new Set(); return items.filter((x) => !seen.has(x.name) && seen.add(x.name)).sort((a, b) => a.d - b.d);
+  };
+  function renderList() {
+    const el = isEl();
+    list.innerHTML = visible().map((it) => `<li><button type="button" data-k="${it.cat}:${it.i}" style="--c:${CAT[it.cat].c}">
+      <i class="fdot"></i><span class="fname"><b>${it.name}</b><small>${el ? it.el : it.en}${it.rate && it.rate !== "—" ? ` · ★ ${it.rate}` : ""}</small></span><em>${away(it.d)}</em></button></li>`).join("");
+    list.scrollTop = 0;
+    if (active) mark(active, false);
   }
-  more.addEventListener("click", () => { expanded = true; render(); });
-  document.getElementById("langToggle").addEventListener("click", () => setTimeout(render, 0));
-  render();
+  const keyOf = (it) => `${it.cat}:${it.i}`;
+  function mark(k, scroll) {
+    active = k;
+    list.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.k === k));
+    Object.entries(markers).forEach(([mk, m]) => m._icon && m._icon.classList.toggle("on", mk === k));
+    if (scroll) { const b = list.querySelector(`[data-k="${k}"]`); if (b) b.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+  }
+  function popup(it) {
+    const el = isEl();
+    return `<div class="fpop"><b>${it.name}</b><span>${el ? it.el : it.en}${it.rate && it.rate !== "—" ? ` · ★ ${it.rate}` : ""}</span><span class="fpop-d">${away(it.d)} ${el ? "από εμάς" : "from us"}</span>
+      <a href="${gmaps(it)}" target="_blank" rel="noopener">${el ? "Άνοιγμα στο Google Maps" : "Open in Google Maps"} ↗</a></div>`;
+  }
+  list.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-k]"); if (!b) return;
+    const k = b.dataset.k, it = items.find((x) => keyOf(x) === k);
+    mark(k, false);
+    if (map && markers[k]) { map.flyTo([it.lat, it.lng], Math.max(map.getZoom(), it.d > 3000 ? 13 : 17), { duration: 0.8 }); markers[k].openPopup(); }
+    if (matchMedia("(max-width:860px)").matches) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  list.addEventListener("mouseover", (e) => { const b = e.target.closest("button[data-k]"); if (b && markers[b.dataset.k] && markers[b.dataset.k]._icon) markers[b.dataset.k]._icon.classList.add("hover"); });
+  list.addEventListener("mouseout", (e) => { const b = e.target.closest("button[data-k]"); if (b && markers[b.dataset.k] && markers[b.dataset.k]._icon) markers[b.dataset.k]._icon.classList.remove("hover"); });
+
+  function showMarkers(fit) {
+    if (!map) return;
+    const vis = new Set(visible().map(keyOf));
+    Object.entries(markers).forEach(([k, m]) => { if (vis.has(k)) m.addTo(map); else m.remove(); });
+    if (fit) {
+      const pts = visible().map((x) => [x.lat, x.lng]); pts.push(HOME);
+      const near = cat === "all" ? visible().filter((x) => x.d < 2500).map((x) => [x.lat, x.lng]).concat([HOME]) : pts;
+      map.flyToBounds(near, { padding: [40, 40], maxZoom: 16, duration: 0.7 });
+    }
+    if (active) mark(active, false);
+  }
+  function init() {
+    const L = window.L;
+    map = L.map(mapEl, { scrollWheelZoom: false, zoomControl: false, attributionControl: true }).setView(HOME, 15);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, subdomains: "abc", attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(map);
+    map.on("click", () => map.scrollWheelZoom.enable());
+    mapEl.addEventListener("mouseleave", () => map.scrollWheelZoom.disable());
+    const homeIcon = L.divIcon({ className: "fm-home", html: '<span><svg class="ic"><use href="#i-key"/></svg></span>', iconSize: [44, 44], iconAnchor: [22, 22] });
+    L.marker(HOME, { icon: homeIcon, zIndexOffset: 1000, title: "Sofia Apartments" }).addTo(map)
+      .bindPopup(() => `<div class="fpop"><b>Sofia Apartments</b><span>${isEl() ? "Αθηνάς 26 · το σπίτι μας" : "Athinas 26 · our home"}</span></div>`);
+    const S = matchMedia("(max-width:620px)").matches ? 22 : 26;
+    items.forEach((it) => {
+      const icon = L.divIcon({ className: "fm-pin", html: `<span style="--c:${CAT[it.cat].c}"><svg class="ic"><use href="#i-${CAT[it.cat].ic}"/></svg></span>`, iconSize: [S, S], iconAnchor: [S / 2, S / 2], popupAnchor: [0, -S / 2] });
+      const m = L.marker([it.lat, it.lng], { icon, title: it.name }).bindPopup(() => popup(it), { maxWidth: 240 });
+      m.on("click", () => mark(keyOf(it), true));
+      markers[keyOf(it)] = m;
+    });
+    showMarkers(false);
+    map.fitBounds(visible().filter((x) => x.d < 2500).map((x) => [x.lat, x.lng]).concat([HOME]), { padding: [40, 40], maxZoom: 16 });
+    mapEl.classList.add("ready");
+  }
+  document.getElementById("fhome").addEventListener("click", () => { if (map) { map.flyTo(HOME, 16, { duration: 0.8 }); map.closePopup(); } });
+
+  // load Leaflet only when the section gets close
+  function loadLeaflet() {
+    if (window.L) return init();
+    const css = document.createElement("link"); css.rel = "stylesheet";
+    css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css);
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    s.onload = () => { const wait = () => (window.L ? init() : setTimeout(wait, 50)); wait(); };
+    s.onerror = () => mapEl.classList.add("failed");
+    document.head.appendChild(s);
+  }
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((en) => { if (en.some((x) => x.isIntersecting)) { io.disconnect(); loadLeaflet(); } }, { rootMargin: "500px" });
+    io.observe(mapEl);
+  } else loadLeaflet();
+  renderList();
+  const lt = document.getElementById("langToggle");
+  if (lt) lt.addEventListener("click", () => setTimeout(() => { renderList(); if (map) map.closePopup(); }, 0));
 })();
 
 /* ---------- reviews carousel ---------- */
