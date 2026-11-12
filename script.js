@@ -313,3 +313,135 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   document.getElementById("langToggle").addEventListener("click", () => setTimeout(render, 0));
   render();
 })();
+
+/* ---------- reviews carousel ---------- */
+(function () {
+  const t = document.getElementById("rvTrack");
+  if (!t) return;
+  document.querySelectorAll("[data-rv]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const card = t.querySelector(".rv");
+      const step = card ? card.getBoundingClientRect().width + 16 : 320;
+      const end = t.scrollLeft + t.clientWidth >= t.scrollWidth - 4;
+      if (+b.dataset.rv > 0 && end) t.scrollTo({ left: 0, behavior: "smooth" });
+      else t.scrollBy({ left: step * +b.dataset.rv, behavior: "smooth" });
+    })
+  );
+})();
+
+/* ---------- live weather (Open-Meteo, no key) ---------- */
+(function () {
+  const box = document.getElementById("wx");
+  if (!box || !window.fetch || !/^https?:/.test(location.protocol)) return;
+  const LAT = 35.336, LON = 25.139;
+  const icon = (c) => c === 0 ? "sun" : c <= 2 ? "cloudsun" : c === 3 ? "cloud" : c <= 48 ? "fog" :
+    (c >= 71 && c <= 77) || c === 85 || c === 86 ? "snow" : c >= 95 ? "storm" : "rain";
+  const TXT = { sun: ["Sunny", "Λιακάδα"], cloudsun: ["Partly cloudy", "Αραιή συννεφιά"], cloud: ["Cloudy", "Συννεφιά"],
+    fog: ["Mist", "Ομίχλη"], rain: ["Rain", "Βροχή"], snow: ["Snow", "Χιόνι"], storm: ["Thunderstorm", "Καταιγίδα"] };
+  const f = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject()));
+  const w = f(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FAthens&forecast_days=5`);
+  const m = f(`https://marine-api.open-meteo.com/v1/marine?latitude=35.35&longitude=25.14&current=sea_surface_temperature&timezone=Europe%2FAthens`).catch(() => null);
+  let data = null;
+  function render() {
+    if (!data) return;
+    const [W, M] = data, el = document.documentElement.lang === "el";
+    const k = icon(W.current.weather_code);
+    box.querySelector(".wx-ic use").setAttribute("href", "#i-" + k);
+    document.getElementById("wxT").textContent = Math.round(W.current.temperature_2m) + "°C";
+    document.getElementById("wxD").textContent = TXT[k][el ? 1 : 0];
+    const sea = M && M.current && M.current.sea_surface_temperature;
+    box.querySelector(".wx-sea").hidden = sea == null;
+    if (sea != null) document.getElementById("wxS").textContent = Math.round(sea) + "°C";
+    const days = W.daily.time.map((d, i) => {
+      const name = i === 0 ? (el ? "Σήμερα" : "Today") : new Date(d + "T12:00").toLocaleDateString(el ? "el-GR" : "en-GB", { weekday: "short" });
+      return `<li><span>${name}</span><svg class="ic"><use href="#i-${icon(W.daily.weather_code[i])}"/></svg><b>${Math.round(W.daily.temperature_2m_max[i])}°</b><small>${Math.round(W.daily.temperature_2m_min[i])}°</small></li>`;
+    });
+    document.getElementById("wxDays").innerHTML = days.join("");
+    box.hidden = false;
+  }
+  Promise.all([w, m]).then((d) => { data = d; render(); }).catch(() => {});
+  const lt = document.getElementById("langToggle");
+  if (lt) lt.addEventListener("click", () => setTimeout(render, 0));
+})();
+
+/* ---------- guests world map ---------- */
+(function () {
+  const box = document.getElementById("gmMap"), top = document.getElementById("gmTop"), tip = document.getElementById("gmTip");
+  const G = window.GUESTS;
+  if (!box || !G) return;
+  const lvl = (n) => (n >= 40 ? 5 : n >= 9 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : 1);
+  const isEl = () => document.documentElement.lang === "el";
+  const label = (iso) => {
+    const g = G[iso]; const el = isEl();
+    return `<b>${g[el ? 2 : 1]}</b>`;
+  };
+  function list() {
+    const rows = Object.entries(G).sort((a, b) => b[1][0] - a[1][0]).slice(0, 8);
+    const max = rows[0][1][0];
+    top.innerHTML = rows.map(([iso, g]) =>
+      `<li data-iso="${iso}"><span>${g[isEl() ? 2 : 1]}</span><i style="--w:${Math.max(4, (g[0] / max) * 100)}%"></i></li>`).join("") +
+      `<li class="gm-more">${isEl() ? "και πολλές ακόμα χώρες" : "and many more countries"}</li>`;
+  }
+  function draw() {
+    const W = window.WORLD; if (!W) return;
+    let svg = `<svg viewBox="0 0 ${W.w} ${W.h}" role="img"><g class="gm-land">`;
+    for (const [iso, d] of W.p) {
+      const g = G[iso];
+      svg += `<path d="${d}"${g ? ` class="v l${lvl(g[0])}${iso === "GRC" ? " home" : ""}" data-iso="${iso}" tabindex="0"` : ""}/>`;
+    }
+    for (const iso in W.dots) if (G[iso]) { const [x, y] = W.dots[iso]; svg += `<circle cx="${x}" cy="${y}" r="4" class="v l${lvl(G[iso][0])}" data-iso="${iso}" tabindex="0"/>`; }
+    svg += `</g><circle class="gm-pin" cx="0" cy="0" r="5"/></svg>`;
+    box.insertAdjacentHTML("afterbegin", svg);
+    const gr = box.querySelector('[data-iso="GRC"]');
+    if (gr) { const b = gr.getBBox(); const pin = box.querySelector(".gm-pin"); pin.setAttribute("cx", b.x + b.width * 0.62); pin.setAttribute("cy", b.y + b.height * 0.93); }
+    box.classList.add("ready");
+  }
+  // world / europe zoom (animated viewBox)
+  let anim;
+  function zoom(to) {
+    const W = window.WORLD, svg = box.querySelector("svg"); if (!W || !svg) return;
+    const from = svg.getAttribute("viewBox").split(" ").map(Number);
+    const target = to === "eu" ? W.eu : [0, 0, W.w, W.h];
+    const t0 = performance.now(), D = matchMedia("(prefers-reduced-motion: reduce)").matches ? 1 : 650;
+    cancelAnimationFrame(anim); hide();
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / D), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      svg.setAttribute("viewBox", from.map((v, i) => v + (target[i] - v) * e).join(" "));
+      svg.classList.toggle("zoomed", to === "eu");
+      if (k < 1) anim = requestAnimationFrame(step);
+    };
+    anim = requestAnimationFrame(step);
+  }
+  document.querySelectorAll(".gm-zoom button").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll(".gm-zoom button").forEach((x) => x.classList.toggle("on", x === b));
+    zoom(b.dataset.z);
+  }));
+  function show(iso, ev) {
+    if (!G[iso]) return hide();
+    tip.innerHTML = label(iso); tip.hidden = false;
+    const r = box.getBoundingClientRect();
+    let x, y;
+    if (ev && ev.clientX != null) { x = ev.clientX - r.left; y = ev.clientY - r.top; }
+    else { const t = box.querySelector(`[data-iso="${iso}"]`).getBoundingClientRect(); x = t.left + t.width / 2 - r.left; y = t.top + t.height / 2 - r.top; }
+    tip.style.left = Math.min(Math.max(x, 70), r.width - 70) + "px"; tip.style.top = y + "px";
+    box.querySelectorAll(".on").forEach((e) => e.classList.remove("on"));
+    box.querySelectorAll(`[data-iso="${iso}"]`).forEach((e) => e.classList.add("on"));
+    top.querySelectorAll("li").forEach((li) => li.classList.toggle("on", li.dataset.iso === iso));
+  }
+  function hide() { tip.hidden = true; box.querySelectorAll(".on").forEach((e) => e.classList.remove("on")); top.querySelectorAll(".on").forEach((e) => e.classList.remove("on")); }
+  box.addEventListener("pointermove", (e) => { const t = e.target.closest("[data-iso]"); t ? show(t.dataset.iso, e) : hide(); });
+  box.addEventListener("pointerleave", hide);
+  box.addEventListener("click", (e) => { const t = e.target.closest("[data-iso]"); t ? show(t.dataset.iso, e) : hide(); });
+  box.addEventListener("focusin", (e) => { const t = e.target.closest("[data-iso]"); if (t) show(t.dataset.iso); });
+  top.addEventListener("pointerover", (e) => { const li = e.target.closest("li[data-iso]"); if (li) show(li.dataset.iso); });
+  top.addEventListener("pointerleave", hide);
+  list();
+  // load the map only when the section gets close
+  const load = () => { if (window.WORLD) return draw(); const s = document.createElement("script"); s.src = "worldmap.js?v=1"; s.onload = draw; document.head.appendChild(s); };
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((en) => { if (en.some((x) => x.isIntersecting)) { io.disconnect(); load(); } }, { rootMargin: "600px" });
+    io.observe(box);
+  } else load();
+  const lt = document.getElementById("langToggle");
+  if (lt) lt.addEventListener("click", () => setTimeout(() => { list(); hide(); }, 0));
+})();
