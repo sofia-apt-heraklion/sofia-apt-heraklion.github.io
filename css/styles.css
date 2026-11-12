@@ -597,3 +597,8 @@ html[lang="en"] .fld>.el,html[lang="el"] .fld>.en{display:none}
 .tip-links .chip{font-size:.85rem;padding:7px 12px}
 .tip-links .ic{width:15px;height:15px}
 @media (max-width:1000px){.tips{grid-template-columns:minmax(0,1fr)}}
+
+/* small-screen header + place names */
+.menu-btn,.icon-btn,.lang{flex-shrink:0}
+@media (max-width:420px){.nav{gap:10px}}
+.ftxt b{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3}
