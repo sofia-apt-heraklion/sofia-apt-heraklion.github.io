@@ -6,7 +6,7 @@
 const CONTACT = {
   phone: "+306972777487",
   whatsapp: "",
-  email: "sofia.kokkini64@gmail.com"
+  email: "sofia.apt.heraklion@gmail.com"
 };
 
 /* ---------- language ---------- */
