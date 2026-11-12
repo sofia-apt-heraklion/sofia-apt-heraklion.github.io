@@ -658,3 +658,10 @@ html[lang="en"] .fld>.el,html[lang="el"] .fld>.en{display:none}
 #location .map{display:flex;flex-direction:column}
 #location .map iframe{flex:1;min-height:420px;height:auto}
 @media (max-width:860px){#location .map iframe{min-height:320px;flex:none;height:320px}}
+.contact .pref{max-width:640px;margin:10px auto 22px;opacity:.92;line-height:1.6}
+.contact .pref b{color:var(--accent-2,#c9a46a);font-weight:600}
+.contact .pref-main{font-size:1.02rem;padding:14px 24px}
+.contact .pref-main .ic{margin-right:8px}
+.contact .pref-alt{margin-top:10px}
+.contact .pref-alt .btn{padding:9px 18px;font-size:.9rem}
+.contact .pref-alt .ic{margin-right:6px}
