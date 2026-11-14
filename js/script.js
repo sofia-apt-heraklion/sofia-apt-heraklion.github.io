@@ -9,17 +9,76 @@ const CONTACT = {
   email: "sofia.apt.heraklion@gmail.com"
 };
 
-/* ---------- language ---------- */
+/* ---------- language: English and Greek are in the page; German, French, Italian come from js/i18n.js ---------- */
+const LANGS = { en: ["EN", "en-GB"], el: ["ΕΛ", "el-GR"], de: ["DE", "de-DE"], fr: ["FR", "fr-FR"], it: ["IT", "it-IT"] };
+const curLang = () => document.documentElement.lang;
+const LOCALE = () => (LANGS[curLang()] || LANGS.en)[1];
 (function () {
-  const root = document.documentElement;
-  let lang = null;
-  try { lang = localStorage.getItem("lang"); } catch (e) {}
-  if (!lang) lang = (navigator.language || "en").toLowerCase().startsWith("el") ? "el" : "en";
-  root.lang = lang;
-  document.getElementById("langToggle").addEventListener("click", () => {
-    root.lang = root.lang === "el" ? "en" : "el";
-    try { localStorage.setItem("lang", root.lang); } catch (e) {}
-  });
+  const root = document.documentElement, btn = document.getElementById("langToggle"), menu = document.getElementById("langMenu");
+  const orig = new WeakMap(), done = new WeakSet();
+  let D = null;                                  // dictionary of the current extra language
+  const segs = (s) => s.split(" · ");
+  function trText(s) {
+    if (!D) return s;
+    const t = s.trim(); if (!t) return s;
+    if (D.text[t] != null) return s.replace(t, D.text[t]);
+    for (const [re, rep] of D.pat) { const r = new RegExp(re); if (r.test(t)) { const m = t.match(r); return s.replace(t, rep.replace(/\$(\d)/g, (_, i) => { const g = m[+i]; return D.text[g] != null ? D.text[g] : g; })); } }
+    if (t.includes(" · ")) { const parts = segs(t).map((p) => trText(p)); const j = parts.join(" · "); if (j !== t) return s.replace(t, j); }
+    return s;
+  }
+  function trNode(n) {
+    if (!D) return;
+    if (n.nodeType === 3) {
+      if (done.has(n) || !n.parentElement || n.parentElement.closest(".el,script,style,svg,[data-no-tr]")) return;
+      const v = trText(n.nodeValue); if (v !== n.nodeValue) { n.nodeValue = v; } done.add(n); return;
+    }
+    if (n.nodeType !== 1 || n.matches("script,style,svg,.el")) return;
+    ["placeholder", "title", "aria-label"].forEach((a) => { if (n.hasAttribute(a)) { const v = trText(n.getAttribute(a)); if (v !== n.getAttribute(a)) n.setAttribute(a, v); } });
+    n.querySelectorAll(".en").forEach(trEn);
+    if (n.matches(".en")) trEn(n);
+    const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let x; while ((x = w.nextNode())) trNode(x);
+    n.querySelectorAll("[placeholder],[title],[aria-label]").forEach((e) => ["placeholder", "title", "aria-label"].forEach((a) => { if (e.hasAttribute(a)) { const v = trText(e.getAttribute(a)); if (v !== e.getAttribute(a)) e.setAttribute(a, v); } }));
+  }
+  function trEn(el) {
+    if (!orig.has(el)) orig.set(el, el.innerHTML);
+    const o = orig.get(el), v = D && D.html[nk(o)];
+    if (v != null && el.innerHTML !== v) el.innerHTML = v;
+  }
+  const tpl = document.createElement("template");
+  const nk = (h) => { tpl.innerHTML = h; return tpl.innerHTML.replace(/\s+/g, " ").trim(); };
+  function prep(d) { if (d && !d._n) { const h = {}; for (const k in d.html) h[nk(k)] = d.html[k]; d.html = h; d._n = 1; } return d; }
+  function restore() { document.querySelectorAll(".en").forEach((el) => { if (orig.has(el) && el.innerHTML !== orig.get(el)) el.innerHTML = orig.get(el); }); }
+  const mo = new MutationObserver((ms) => { if (!D) return; ms.forEach((m) => { if (m.type === "characterData") { done.delete(m.target); trNode(m.target); } else if (m.type === "attributes") trNode(m.target); else m.addedNodes.forEach(trNode); }); });
+  function loadDict(l) {
+    if (window.I18N) return Promise.resolve(window.I18N[l]);
+    return new Promise((res) => { const s = document.createElement("script"); s.src = "js/i18n.js?v=2"; s.onload = () => res(window.I18N && window.I18N[l]); s.onerror = () => res(null); document.head.appendChild(s); });
+  }
+  async function setLang(l, save) {
+    if (!LANGS[l]) l = "en";
+    root.lang = l;
+    document.getElementById("langCur").textContent = LANGS[l][0];
+    menu.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-checked", b.dataset.lang === l));
+    if (save) try { localStorage.setItem("lang", l); } catch (e) {}
+    D = null; restore();
+    if (l !== "en" && l !== "el") {
+      const dict = await loadDict(l);
+      if (root.lang !== l) return;
+      if (dict) { D = prep(dict); trNode(document.body); mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "title", "aria-label"] }); }
+    } else mo.disconnect();
+    document.dispatchEvent(new Event("langchange"));
+  }
+  const open = (o) => { menu.hidden = !o; btn.setAttribute("aria-expanded", o); };
+  btn.addEventListener("click", (e) => { e.stopPropagation(); open(menu.hidden); });
+  menu.addEventListener("click", (e) => { const b = e.target.closest("[data-lang]"); if (!b) return; open(false); setLang(b.dataset.lang, true); });
+  document.addEventListener("click", (e) => { if (!menu.hidden && !e.target.closest(".lang-wrap")) open(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) open(false); });
+  let l = null;
+  try { l = localStorage.getItem("lang"); } catch (e) {}
+  if (!l) { const n = (navigator.language || "en").slice(0, 2).toLowerCase(); l = LANGS[n] ? n : "en"; }
+  root.lang = LANGS[l] ? l : "en";
+  document.getElementById("langCur").textContent = (LANGS[root.lang] || LANGS.en)[0];
+  if (root.lang !== "en" && root.lang !== "el") addEventListener("DOMContentLoaded", () => setLang(root.lang, false));
+  window.setLang = setLang;
 })();
 
 const EMAIL = CONTACT.email, PHONE = CONTACT.phone;
@@ -584,7 +643,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
       .catch(() => get("routes.json")).then((d) => { ROUTES = d || {}; renderList(); }).catch(() => {});
   }
   const lt = document.getElementById("langToggle");
-  if (lt) lt.addEventListener("click", () => setTimeout(() => {
+  document.addEventListener("langchange", () => setTimeout(() => {
     renderList(); setPh(); tipLang(); renderRings(); if (map) map.closePopup();
     if (active && card && !card.hidden) { const it = items.find((x) => keyOf(x) === active); if (it) showCard(it); }
   }, 0));
@@ -642,7 +701,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
     box.querySelector(".wx-sea").hidden = sea == null;
     if (sea != null) document.getElementById("wxS").textContent = Math.round(sea) + "°C";
     const days = W.daily.time.map((d, i) => {
-      const name = i === 0 ? (el ? "Σήμερα" : "Today") : new Date(d + "T12:00").toLocaleDateString(el ? "el-GR" : "en-GB", { weekday: "short" });
+      const name = i === 0 ? (el ? "Σήμερα" : "Today") : new Date(d + "T12:00").toLocaleDateString(LOCALE(), { weekday: "short" });
       return `<li><span>${name}</span><svg class="ic"><use href="#i-${icon(W.daily.weather_code[i])}"/></svg><b>${Math.round(W.daily.temperature_2m_max[i])}°</b><small>${Math.round(W.daily.temperature_2m_min[i])}°</small></li>`;
     });
     document.getElementById("wxDays").innerHTML = days.join("");
@@ -650,7 +709,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   }
   Promise.all([w, m]).then((d) => { data = d; render(); }).catch(() => {});
   const lt = document.getElementById("langToggle");
-  if (lt) lt.addEventListener("click", () => setTimeout(render, 0));
+  document.addEventListener("langchange", () => setTimeout(render, 0));
 })();
 
 /* ---------- guests world map ---------- */
@@ -658,17 +717,24 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   const box = document.getElementById("gmMap"), top = document.getElementById("gmTop"), tip = document.getElementById("gmTip");
   const G = window.GUESTS;
   if (!box || !G) return;
+  const ISO2 = { GRC: "GR", FRA: "FR", GBR: "GB", USA: "US", ISR: "IL", DEU: "DE", UKR: "UA", CAN: "CA", NLD: "NL", ITA: "IT", IND: "IN", BRA: "BR", BEL: "BE", AUS: "AU", ARE: "AE", TUR: "TR", CHE: "CH", SWE: "SE", KOR: "KR", SVK: "SK", SGP: "SG", FIN: "FI", EST: "EE", DNK: "DK", CYP: "CY", ARG: "AR" };
+  const cname = (iso) => {
+    const l = document.documentElement.lang, g = G[iso];
+    if (l === "el") return g[2];
+    if (l === "en" || !window.Intl || !Intl.DisplayNames) return g[1];
+    try { return new Intl.DisplayNames([l], { type: "region" }).of(ISO2[iso]) || g[1]; } catch (e) { return g[1]; }
+  };
   const lvl = (n) => (n >= 40 ? 5 : n >= 9 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : 1);
   const isEl = () => document.documentElement.lang === "el";
   const label = (iso) => {
     const g = G[iso]; const el = isEl();
-    return `<b>${g[el ? 2 : 1]}</b>`;
+    return `<b>${cname(iso)}</b>`;
   };
   function list() {
     const rows = Object.entries(G).sort((a, b) => b[1][0] - a[1][0]).slice(0, 8);
     const max = rows[0][1][0];
     top.innerHTML = rows.map(([iso, g]) =>
-      `<li data-iso="${iso}"><span>${g[isEl() ? 2 : 1]}</span><i style="--w:${Math.max(4, (g[0] / max) * 100)}%"></i></li>`).join("") +
+      `<li data-iso="${iso}"><span>${cname(iso)}</span><i style="--w:${Math.max(4, (g[0] / max) * 100)}%"></i></li>`).join("") +
       `<li class="gm-more">${isEl() ? "και πολλές ακόμα χώρες" : "and many more countries"}</li>`;
   }
   function draw() {
@@ -732,7 +798,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
     io.observe(box);
   } else load();
   const lt = document.getElementById("langToggle");
-  if (lt) lt.addEventListener("click", () => setTimeout(() => { list(); hide(); }, 0));
+  document.addEventListener("langchange", () => setTimeout(() => { list(); hide(); }, 0));
 })();
 
 /* ---------- availability calendar (synced from Airbnb via availability.json) ---------- */
@@ -759,7 +825,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   const perView = () => (matchMedia("(max-width:620px)").matches ? 1 : 2);
 
   function render() {
-    const busy = nightsOf(apt()), n = perView(), lang = el() ? "el-GR" : "en-GB";
+    const busy = nightsOf(apt()), n = perView(), lang = LOCALE();
     const wd = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(lang, { weekday: "narrow" }));
     let html = "", tt = "";
     for (let m = 0; m < n; m++) {
@@ -832,7 +898,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
     render();
   }));
   form.querySelectorAll('input[name="apt"]').forEach((r) => r.addEventListener("change", render));
-  const lt = document.getElementById("langToggle"); if (lt) lt.addEventListener("click", () => setTimeout(render, 0));
+  const lt = document.getElementById("langToggle"); document.addEventListener("langchange", () => setTimeout(render, 0));
   let rw; addEventListener("resize", () => { clearTimeout(rw); rw = setTimeout(render, 200); });
 
   function showUpdated() {
@@ -845,7 +911,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   const get = (u) => fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject()));
   if (/^https?:/.test(location.protocol) && window.fetch)
     get(RAW).catch(() => get("availability.json")).then((d) => { data = d; showUpdated(); render(); cal.classList.add("synced"); }).catch(() => {});
-  if (lt) lt.addEventListener("click", () => setTimeout(showUpdated, 0));
+  document.addEventListener("langchange", () => setTimeout(showUpdated, 0));
 })();
 
 
