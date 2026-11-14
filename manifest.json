@@ -1,11 +1,11 @@
 {
- "name": "Sofia Apartments \u00b7 Heraklion",
+ "name": "Sofia Apartments · Heraklion",
  "short_name": "Sofia Apts",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",
  "background_color": "#f6f3ee",
- "theme_color": "#23211f",
+ "theme_color": "#f6f3ee",
  "icons": [
   {
    "src": "images/icons/icon-192.png",
