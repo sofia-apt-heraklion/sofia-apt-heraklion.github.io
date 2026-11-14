@@ -178,12 +178,18 @@ document.addEventListener("keydown", (e) => {
 /* ---------- nav: shadow, scroll-spy, mobile menu ---------- */
 const nav = document.querySelector(".nav");
 const menuBtn = document.getElementById("menuBtn");
-menuBtn.addEventListener("click", () => {
-  const o = nav.classList.toggle("open");
+function setMenu(o) {
+  nav.style.setProperty("--navh", nav.getBoundingClientRect().bottom + "px");
+  nav.classList.toggle("open", o);
+  document.documentElement.classList.toggle("menu-open", o);
   menuBtn.setAttribute("aria-expanded", o);
-});
-document.querySelectorAll(".nav-links a").forEach((a) => a.addEventListener("click", () => nav.classList.remove("open")));
-const links = [...document.querySelectorAll(".nav-links a")];
+  menuBtn.setAttribute("aria-label", o ? "Close menu" : "Menu");
+}
+menuBtn.addEventListener("click", () => setMenu(!nav.classList.contains("open")));
+document.querySelectorAll(".nav-links a").forEach((a) => a.addEventListener("click", () => setMenu(false)));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && nav.classList.contains("open")) setMenu(false); });
+addEventListener("resize", () => { if (innerWidth > 860 && nav.classList.contains("open")) setMenu(false); });
+const links = [...document.querySelectorAll(".nav-links > a")];
 const sections = links.map((a) => document.querySelector(a.getAttribute("href")));
 const bookbar = document.getElementById("bookbar");
 function onScroll() {
@@ -198,7 +204,13 @@ function onScroll() {
 window.addEventListener("scroll", onScroll, { passive: true });
 onScroll();
 
-/* ---------- reveal on scroll ---------- */
+/* ---------- reveal on scroll: sections appear step by step ---------- */
+// add the reveal effect to every main block without touching the HTML
+["#sofia-164 .gwrap", "#sofia-264 .gwrap", ".apt .cols > div", ".plan", ".group", ".rv-top", ".rv-track", ".gm-grid", ".gstats",
+ "#location .cols > div", ".arr-grid", ".tips", ".fmap-grid", ".flists", ".qas", ".book-grid > *", ".contact .wrap > *",
+ ".eyebrow", "section h2", ".choose .card"].forEach((sel) =>
+  document.querySelectorAll(sel).forEach((el) => { if (!el.closest(".hero,.nav,dialog,.reveal,.reveal-stagger") || el.matches(".reveal")) el.classList.add("reveal"); }));
+document.querySelectorAll(".rv-track, .arr-grid, .tips, .gstats, .qas").forEach((el) => { el.classList.remove("reveal"); el.classList.add("reveal-stagger"); });
 const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => {
   es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
 }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }) : null;
@@ -333,54 +345,125 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   const R = 6371e3, rad = (d) => (d * Math.PI) / 180;
   const dist = (a, b) => { const dLa = rad(b[0] - a[0]), dLo = rad(b[1] - a[1]); const x = Math.sin(dLa / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
   items.forEach((it) => (it.d = dist(HOME, [it.lat, it.lng])));
-  const away = (m) => {
+  let ROUTES = {};
+  const fmtKm = (m) => { const km = m / 1000; return m < 1000 ? Math.round(m / 10) * 10 + " m" : (km < 10 ? km.toFixed(1) : Math.round(km)) + " km"; };
+  const routeText = (r) => {
+    const min = Math.max(1, Math.round(r.s / 60)), el = isEl();
+    return r.mode === "foot" ? (el ? `${min}′ με τα πόδια` : `${min} min walk`) : (el ? `${min}′ με αυτοκίνητο` : `${min} min drive`);
+  };
+  const away = (m, name) => {
+    if (name && ROUTES[name]) return routeText(ROUTES[name]);
     const walk = Math.max(1, Math.round((m * 1.3) / 80));          // street detour, ~80 m per minute
     if (m < 1800) return isEl() ? `${walk}′ με τα πόδια` : `${walk} min walk`;
-    const km = m / 1000; return (km < 10 ? km.toFixed(1) : Math.round(km)) + " km";
+    return fmtKm(m);
   };
   const gmaps = (it) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.name + ", Heraklion")}`;
-  let cat = "all", map = null, markers = {}, active = null;
+  let cat = "all", map = null, markers = {}, active = null, routeLayer = null, st;
+  const card = document.getElementById("froute");
 
   // counters on the tabs
   document.querySelectorAll(".ftab").forEach((b) => {
     b.querySelector("small").textContent = b.dataset.cat === "all" ? new Set(items.map((x) => x.name)).size : items.filter((x) => x.cat === b.dataset.cat).length;
     b.addEventListener("click", () => {
       document.querySelectorAll(".ftab").forEach((x) => x.classList.toggle("on", x === b));
-      cat = b.dataset.cat; renderList(); showMarkers(true);
+      cat = b.dataset.cat; query = ""; if (search) search.value = ""; clearRoute(); active = null; renderList(); showMarkers(true);
     });
   });
+  let query = "";
+  const fold = (t) => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const LABEL = { cafe: "coffee breakfast cafe καφες πρωινο", food: "food eat restaurant φαγητο εστιατοριο", drinks: "drinks bar cocktail ποτο μπαρ", sweet: "sweets ice cream γλυκα παγωτο", sights: "sightseeing museum αξιοθεατα μουσειο", beach: "beach swim παραλια θαλασσα", daily: "everyday supermarket pharmacy καθημερινα σουπερ μαρκετ φαρμακειο" };
+  const matches = (x) => !query || fold(`${x.name} ${x.en} ${x.el} ${LABEL[x.cat]}`).includes(query);
   const visible = () => {
+    if (query) { const seen = new Set(); return items.filter((x) => matches(x) && !seen.has(x.name) && seen.add(x.name)).sort((a, b) => a.d - b.d); }
     if (cat !== "all") return items.filter((x) => x.cat === cat).sort((a, b) => a.d - b.d);
     const seen = new Set(); return items.filter((x) => !seen.has(x.name) && seen.add(x.name)).sort((a, b) => a.d - b.d);
   };
   function renderList() {
     const el = isEl();
-    list.innerHTML = visible().map((it) => `<li><button type="button" data-k="${it.cat}:${it.i}" style="--c:${CAT[it.cat].c}">
-      <i class="fdot"></i><span class="fname"><b>${it.name}</b><small>${el ? it.el : it.en}${it.rate && it.rate !== "—" ? ` · ★ ${it.rate}` : ""}</small></span><em>${away(it.d)}</em></button></li>`).join("");
+    const v = visible();
+    if (!v.length) { list.innerHTML = `<li class="fnone">${el ? "Δεν βρέθηκε κάτι. Δοκιμάστε άλλη λέξη." : "Nothing found. Try another word."}</li>`; return; }
+    list.innerHTML = v.map((it) => `<li><button type="button" data-k="${it.cat}:${it.i}" style="--c:${CAT[it.cat].c}">
+      <i class="fdot"></i><span class="fname"><b>${it.name}</b><small>${el ? it.el : it.en}${it.rate && it.rate !== "—" ? ` · ★ ${it.rate}` : ""}</small></span><em>${away(it.d, it.name)}</em></button></li>`).join("");
     list.scrollTop = 0;
     if (active) mark(active, false);
   }
   const keyOf = (it) => `${it.cat}:${it.i}`;
   function mark(k, scroll) {
     active = k;
+    if (!k) { list.querySelectorAll("button.on").forEach((b) => b.classList.remove("on")); Object.values(markers).forEach((m) => m._icon && m._icon.classList.remove("on")); return; }
     list.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.k === k));
     Object.entries(markers).forEach(([mk, m]) => m._icon && m._icon.classList.toggle("on", mk === k));
     if (scroll) { const b = list.querySelector(`[data-k="${k}"]`); if (b) b.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
   }
   function popup(it) {
     const el = isEl();
-    return `<div class="fpop"><b>${it.name}</b><span>${el ? it.el : it.en}${it.rate && it.rate !== "—" ? ` · ★ ${it.rate}` : ""}</span><span class="fpop-d">${away(it.d)} ${el ? "από εμάς" : "from us"}</span>
+    return `<div class="fpop"><b>${it.name}</b><span>${el ? it.el : it.en}${it.rate && it.rate !== "—" ? ` · ★ ${it.rate}` : ""}</span><span class="fpop-d">${away(it.d, it.name)} ${el ? "από εμάς" : "from us"}</span>
       <a href="${gmaps(it)}" target="_blank" rel="noopener">${el ? "Άνοιγμα στο Google Maps" : "Open in Google Maps"} ↗</a></div>`;
   }
   list.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-k]"); if (!b) return;
     const k = b.dataset.k, it = items.find((x) => keyOf(x) === k);
-    mark(k, false);
-    if (map && markers[k]) { map.flyTo([it.lat, it.lng], Math.max(map.getZoom(), it.d > 3000 ? 13 : 17), { duration: 0.8 }); markers[k].openPopup(); }
+    select(it, false);
     if (matchMedia("(max-width:860px)").matches) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   list.addEventListener("mouseover", (e) => { const b = e.target.closest("button[data-k]"); if (b && markers[b.dataset.k] && markers[b.dataset.k]._icon) markers[b.dataset.k]._icon.classList.add("hover"); });
   list.addEventListener("mouseout", (e) => { const b = e.target.closest("button[data-k]"); if (b && markers[b.dataset.k] && markers[b.dataset.k]._icon) markers[b.dataset.k]._icon.classList.remove("hover"); });
+
+  // Google-style encoded polyline (precision 5) -> [[lat,lng],...]
+  function decode(str) {
+    const pts = []; let i = 0, lat = 0, lng = 0;
+    while (i < str.length) {
+      for (const k of [0, 1]) {
+        let b, shift = 0, res = 0;
+        do { b = str.charCodeAt(i++) - 63; res |= (b & 31) << shift; shift += 5; } while (b >= 32);
+        const d = res & 1 ? ~(res >> 1) : res >> 1;
+        if (k === 0) lat += d; else lng += d;
+      }
+      pts.push([lat / 1e5, lng / 1e5]);
+    }
+    return pts;
+  }
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function clearRoute() { if (routeLayer && map) map.removeLayer(routeLayer); routeLayer = null; if (card) card.hidden = true; }
+  function drawRoute(it) {
+    const L = window.L, r = ROUTES[it.name], color = CAT[it.cat].c;
+    const pts = r ? decode(r.line) : [HOME, [it.lat, it.lng]];
+    routeLayer = L.layerGroup().addTo(map);
+    L.polyline(pts, { color: "#fff", weight: 9, opacity: 0.95, lineCap: "round", lineJoin: "round", interactive: false }).addTo(routeLayer);
+    const line = L.polyline(pts, { color, weight: 5, lineCap: "round", lineJoin: "round", interactive: false, dashArray: r ? null : "2 10" }).addTo(routeLayer);
+    const path = line.getElement && line.getElement();
+    if (path && r && !reduced && path.getTotalLength) {           // the line "writes itself" from our door to the place
+      const len = path.getTotalLength();
+      path.style.strokeDasharray = len; path.style.strokeDashoffset = len;
+      path.getBoundingClientRect();
+      path.style.transition = "stroke-dashoffset 1.1s cubic-bezier(.4,0,.2,1)";
+      path.style.strokeDashoffset = 0;
+      path.addEventListener("transitionend", () => { path.style.strokeDasharray = ""; path.style.transition = ""; }, { once: true });
+    }
+    return pts;
+  }
+  function showCard(it) {
+    if (!card) return;
+    const r = ROUTES[it.name], el = isEl(), foot = r ? r.mode === "foot" : it.d < 2500;
+    const dir = `https://www.google.com/maps/dir/?api=1&origin=${HOME.join(",")}&destination=${encodeURIComponent(it.name + ", Heraklion")}&travelmode=${foot ? "walking" : "driving"}`;
+    card.innerHTML = `<span class="fr-ic" style="--c:${CAT[it.cat].c}"><svg class="ic"><use href="#i-${foot ? "pin" : "car"}"/></svg></span>
+      <span class="fr-t"><b>${it.name}</b><small>${r ? `${routeText(r)} · ${fmtKm(r.m)}` : `${away(it.d, it.name)} · ${el ? "σε ευθεία" : "as the crow flies"}`}</small></span>
+      <a class="fr-go" href="${dir}" target="_blank" rel="noopener">${el ? "Οδηγίες" : "Directions"}</a>
+      <button class="fr-x" type="button" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>`;
+    card.hidden = false;
+    card.querySelector(".fr-x").addEventListener("click", () => { clearRoute(); mark(null, false); map.closePopup(); });
+  }
+  function select(it, fromMarker) {
+    const k = keyOf(it);
+    clearTimeout(st);
+    mark(k, fromMarker);
+    if (!map) return;
+    clearRoute();
+    const pts = drawRoute(it);
+    showCard(it);
+    map.flyToBounds(pts.concat([HOME]), { paddingTopLeft: [40, 70], paddingBottomRight: [40, 110], maxZoom: 17, duration: 0.8 });
+    if (markers[k]) map.once("moveend", () => markers[k].openPopup());
+  }
 
   function showMarkers(fit) {
     if (!map) return;
@@ -407,14 +490,77 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
     items.forEach((it) => {
       const icon = L.divIcon({ className: "fm-pin", html: `<span style="--c:${CAT[it.cat].c}"><svg class="ic"><use href="#i-${CAT[it.cat].ic}"/></svg></span>`, iconSize: [S, S], iconAnchor: [S / 2, S / 2], popupAnchor: [0, -S / 2] });
       const m = L.marker([it.lat, it.lng], { icon, title: it.name }).bindPopup(() => popup(it), { maxWidth: 240 });
-      m.on("click", () => mark(keyOf(it), true));
+      m.on("click", () => select(it, true));
       markers[keyOf(it)] = m;
     });
     showMarkers(false);
     map.fitBounds(visible().filter((x) => x.d < 2500).map((x) => [x.lat, x.lng]).concat([HOME]), { padding: [40, 40], maxZoom: 16 });
     mapEl.classList.add("ready");
   }
-  document.getElementById("fhome").addEventListener("click", () => { if (map) { map.flyTo(HOME, 16, { duration: 0.8 }); map.closePopup(); } });
+  document.getElementById("fhome").addEventListener("click", () => { if (map) { clearRoute(); mark(null, false); map.closePopup(); map.flyTo(HOME, 16, { duration: 0.8 }); } });
+
+  // ---- search ----
+  const search = document.getElementById("fsearch");
+  const setPh = () => { if (search) search.placeholder = isEl() ? "Αναζήτηση, π.χ. καφές, παραλία…" : "Search a place, e.g. coffee, beach…"; };
+  setPh();
+  if (search) search.addEventListener("input", () => {
+    query = fold(search.value.trim());
+    clearRoute(); active = null; renderList(); showMarkers(false);
+    clearTimeout(st); st = setTimeout(() => {
+      if (!map || !visible().length) return;
+      const pts = (query ? visible() : visible().filter((x) => x.d < 2500)).map((x) => [x.lat, x.lng]).concat([HOME]);
+      map.flyToBounds(pts, { padding: [50, 50], maxZoom: 16, duration: 0.6 });
+    }, 450);
+  });
+  // ---- map tools ----
+  const tipLang = () => document.querySelectorAll(".ftools button").forEach((b) => { const t = b.dataset[isEl() ? "tipEl" : "tipEn"]; b.title = t; b.setAttribute("aria-label", t); });
+  tipLang();
+  let ringLayer = null, meLayer = null;
+  function renderRings() {
+    if (!map) return;
+    if (ringLayer) { map.removeLayer(ringLayer); ringLayer = null; }
+    if (document.getElementById("fRings").getAttribute("aria-pressed") !== "true") return;
+    const L = window.L; ringLayer = L.layerGroup().addTo(map);
+    [[5, 300], [10, 620], [15, 940]].forEach(([n, r], k) => {
+      L.circle(HOME, { radius: r, color: "#23211f", weight: 1.2, opacity: 0.45 - k * 0.1, dashArray: "4 6", fill: k === 0, fillColor: "#c9a46a", fillOpacity: 0.16, interactive: false }).addTo(ringLayer);
+      L.marker([HOME[0] + r / 111320, HOME[1]], { interactive: false, icon: L.divIcon({ className: "", iconSize: null, iconAnchor: [28, 10], html: `<span class="ring-label">${n} ${isEl() ? "λεπτά" : "min"}</span>` }) }).addTo(ringLayer);
+    });
+    map.flyTo(HOME, 15, { duration: 0.7 });
+  }
+  document.getElementById("fRings").addEventListener("click", (e) => { const b = e.currentTarget; b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); renderRings(); });
+  document.getElementById("fSurprise").addEventListener("click", (e) => {
+    if (!map) return;
+    const pool = visible().filter((x) => x.d < 2500 && keyOf(x) !== active);
+    if (!pool.length) return;
+    const b = e.currentTarget; b.classList.remove("spin"); void b.offsetWidth; b.classList.add("spin");
+    select(pool[Math.floor(Math.random() * pool.length)], true);
+  });
+  document.getElementById("fLocate").addEventListener("click", () => {
+    if (!map || !navigator.geolocation) return;
+    const L = window.L;
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const me = [pos.coords.latitude, pos.coords.longitude];
+      if (meLayer) map.removeLayer(meLayer);
+      meLayer = L.marker(me, { icon: L.divIcon({ className: "", iconSize: [18, 18], iconAnchor: [9, 9], html: '<div class="fm-me"></div>' }) }).addTo(map)
+        .bindPopup(`<div class="fpop"><b>${isEl() ? "Είστε εδώ" : "You are here"}</b><span>${fmtKm(dist(me, HOME))} ${isEl() ? "από το σπίτι μας" : "from our home"}</span></div>`);
+      map.flyToBounds([me, HOME], { padding: [80, 80], maxZoom: 16, duration: 0.9 });
+      map.once("moveend", () => meLayer.openPopup());
+    }, () => {
+      if (!card) return;
+      card.innerHTML = `<span class="fr-t"><b>${isEl() ? "Δεν βρέθηκε η τοποθεσία σας" : "We couldn't find your location"}</b><small>${isEl() ? "Ελέγξτε ότι επιτρέπετε την τοποθεσία στον browser." : "Check that location is allowed in your browser."}</small></span><button class="fr-x" type="button" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>`;
+      card.hidden = false; card.querySelector(".fr-x").addEventListener("click", () => (card.hidden = true));
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+  const grid = document.querySelector(".fmap-grid");
+  function toggleFull(force) {
+    const on = force !== undefined ? force : !grid.classList.contains("ffull");
+    grid.classList.toggle("ffull", on);
+    document.getElementById("fFull").setAttribute("aria-pressed", on);
+    document.documentElement.classList.toggle("map-full", on);
+    if (map) setTimeout(() => map.invalidateSize(), 60);
+  }
+  document.getElementById("fFull").addEventListener("click", () => toggleFull());
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && grid.classList.contains("ffull")) toggleFull(false); });
 
   // load Leaflet only when the section gets close
   function loadLeaflet() {
@@ -432,14 +578,35 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
     io.observe(mapEl);
   } else loadLeaflet();
   renderList();
+  if (window.fetch && /^https?:/.test(location.protocol)) {
+    const get = (u) => fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject()));
+    get("https://raw.githubusercontent.com/sofia-apt-heraklion/sofia-apt-heraklion.github.io/main/routes.json")
+      .catch(() => get("routes.json")).then((d) => { ROUTES = d || {}; renderList(); }).catch(() => {});
+  }
   const lt = document.getElementById("langToggle");
-  if (lt) lt.addEventListener("click", () => setTimeout(() => { renderList(); if (map) map.closePopup(); }, 0));
+  if (lt) lt.addEventListener("click", () => setTimeout(() => {
+    renderList(); setPh(); tipLang(); renderRings(); if (map) map.closePopup();
+    if (active && card && !card.hidden) { const it = items.find((x) => keyOf(x) === active); if (it) showCard(it); }
+  }, 0));
 })();
 
-/* ---------- reviews carousel ---------- */
+/* ---------- reviews carousel (moves by itself every 6 s while visible; pauses on hover or touch) ---------- */
 (function () {
   const t = document.getElementById("rvTrack");
   if (!t) return;
+  let timer = null, paused = false;
+  const step = () => {
+    const c = t.querySelector(".rv"), w = c ? c.getBoundingClientRect().width + 16 : 320;
+    if (t.scrollLeft + t.clientWidth >= t.scrollWidth - 4) t.scrollTo({ left: 0, behavior: "smooth" }); else t.scrollBy({ left: w, behavior: "smooth" });
+  };
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches && "IntersectionObserver" in window) {
+    new IntersectionObserver(([e]) => {
+      clearInterval(timer);
+      if (e.isIntersecting) timer = setInterval(() => !paused && !document.hidden && step(), 6000);
+    }, { threshold: 0.4 }).observe(t);
+    ["mouseenter", "focusin", "touchstart"].forEach((ev) => t.addEventListener(ev, () => (paused = true), { passive: true }));
+    ["mouseleave", "focusout"].forEach((ev) => t.addEventListener(ev, () => (paused = false)));
+  }
   document.querySelectorAll("[data-rv]").forEach((b) =>
     b.addEventListener("click", () => {
       const card = t.querySelector(".rv");
@@ -679,4 +846,60 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   if (/^https?:/.test(location.protocol) && window.fetch)
     get(RAW).catch(() => get("availability.json")).then((d) => { data = d; showUpdated(); render(); cal.classList.add("synced"); }).catch(() => {});
   if (lt) lt.addEventListener("click", () => setTimeout(showUpdated, 0));
+})();
+
+
+/* ---------- numbers count up and bars fill when they come into view ---------- */
+(function () {
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const nums = [...document.querySelectorAll(".rv-score b, .rv-bars b, .gstats b")];
+  nums.forEach((n) => {
+    const m = n.textContent.match(/^(\D*)(\d+(?:[.,]\d+)?)(.*)$/s);
+    if (!m) return;
+    n.dataset.pre = m[1]; n.dataset.to = m[2].replace(",", "."); n.dataset.suf = m[3];
+    n.dataset.dec = (m[2].split(/[.,]/)[1] || "").length;
+  });
+  const run = (n) => {
+    if (!n.dataset.to || n.dataset.done) return;
+    n.dataset.done = 1;
+    if (reduced) return;
+    const to = parseFloat(n.dataset.to), dec = +n.dataset.dec, t0 = performance.now(), dur = 1400;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      n.textContent = n.dataset.pre + (to * e).toFixed(dec) + n.dataset.suf;
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    n.textContent = n.dataset.pre + (0).toFixed(dec) + n.dataset.suf;
+    requestAnimationFrame(tick);
+  };
+  const fill = (el) => el.classList.add("filled");
+  if (!("IntersectionObserver" in window)) { document.querySelectorAll(".rv-bars, .gm-top").forEach(fill); return; }
+  const ob = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    ob.unobserve(e.target);
+    if (e.target.matches(".rv-bars, .gm-top")) fill(e.target); else run(e.target);
+  }), { threshold: 0.5 });
+  nums.forEach((n) => ob.observe(n));
+  document.querySelectorAll(".rv-bars, .gm-top").forEach((el) => ob.observe(el));
+  // the guests list is rebuilt when the language changes: keep it filled
+  const gt = document.getElementById("gmTop");
+  if (gt) new MutationObserver(() => { if (gt.dataset.seen) fill(gt); }).observe(gt, { childList: true });
+  if (gt) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { gt.dataset.seen = 1; o.disconnect(); } }).observe(gt);
+})();
+
+
+/* ---------- hero: slow zoom on load and gentle parallax while scrolling ---------- */
+(function () {
+  const img = document.querySelector(".hero-img");
+  if (!img || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  img.classList.add("kb");
+  let ticking = false;
+  addEventListener("scroll", () => {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(() => {
+      const y = Math.min(scrollY, innerHeight);
+      img.style.setProperty("--py", (y * 0.25).toFixed(1) + "px");
+      ticking = false;
+    });
+  }, { passive: true });
 })();
