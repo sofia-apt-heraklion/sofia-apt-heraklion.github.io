@@ -793,3 +793,24 @@ html.map-full .bookbar,html.map-full .totop{display:none}
 @media (max-width:620px){.apt-logo{height:84px}.card-mark{height:62px;top:-40px;right:16px}.contact-logo{height:104px}}
 @media (max-width:380px){.brand img{height:28px}.apt-logo{height:74px}}
 .card .card-mark{width:auto;aspect-ratio:auto;object-fit:contain}
+
+/* ===== apartment logos in the menu bar and next to the titles ===== */
+.nav-links .nl-mark{display:block;height:22px;width:auto;flex:0 0 auto}
+.apt-head{display:flex;align-items:center;gap:24px;margin:0 0 16px}
+.apt-head .apt-logo{height:86px;margin:0;flex:0 0 auto}
+.apt-head .apt-mark{display:none;height:62px;width:auto;flex:0 0 auto}
+.apt-sep{width:1px;align-self:stretch;min-height:60px;background:var(--line);flex:0 0 1px}
+.apt-head h2{margin:0;min-width:0}
+@media (max-width:860px){
+  .nav-links > a .nl-mark{height:30px}
+  .apt-head{gap:18px}
+  .apt-head .apt-logo{height:72px}
+}
+@media (max-width:620px){
+  .apt-head{gap:14px}
+  .apt-head .apt-logo{display:none}
+  .apt-head .apt-mark{display:block}
+  .apt-sep{min-height:52px}
+  .apt-head h2{font-size:1.45rem;line-height:1.2}
+}
+@media (max-width:380px){.apt-head .apt-mark{height:54px}.apt-head h2{font-size:1.3rem}}
