@@ -115,7 +115,6 @@ document.querySelectorAll("[data-contact]").forEach((a) => {
   if (kind === "phone") a.href = "tel:" + v;
   if (kind === "whatsapp") { a.href = "https://wa.me/" + v.replace(/[^0-9]/g, ""); a.target = "_blank"; a.rel = "noopener"; }
   if (kind === "email") a.href = "mailto:" + v;
-  if (!a.dataset.goatcounterClick) a.dataset.goatcounterClick = "contact-" + kind;
 });
 
 document.getElementById("year").textContent = new Date().getFullYear();
@@ -410,7 +409,6 @@ form.addEventListener("submit", (e) => {
       document.getElementById("bookSum").textContent = `${apt} · ${new Date(fin.value).toLocaleDateString(LOCALE(), { day: "numeric", month: "short" })} – ${new Date(fout.value).toLocaleDateString(LOCALE(), { day: "numeric", month: "short", year: "numeric" })} · ${fg.value} ${t("guests", "άτομα")}`;
       clearTimeout(toast._t); document.getElementById("toast").classList.remove("show");
       form.hidden = true; done.hidden = false; done.focus();
-      if (window.goatcounter && goatcounter.count) goatcounter.count({ path: "booking-request-sent", title: "Booking request sent", event: true });
     })
     .catch(mailFallback)
     .finally(() => { clearTimeout(tm); btn.disabled = false; btn.classList.remove("busy"); });
