@@ -10,7 +10,7 @@ const CONTACT = {
   // Web app address of the Google Apps Script booking form (scripts/google-apps-script/booking-form.gs).
   // When it is filled in, guests also get an automatic confirmation email in their language.
   // Leave it empty ("") and requests are sent through FormSubmit instead.
-  form: ""
+  form: "https://script.google.com/macros/s/AKfycbxVfDLdWUupCPgL10W1ImQsyrhMGGV0KxYFlJBgMtbpJPbprIwlLCNkIewjGVx_nGE/exec"
 };
 
 /* ---------- language: English and Greek are in the page; German, French, Italian come from js/i18n.js ---------- */
