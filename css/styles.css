@@ -906,8 +906,6 @@ html.map-full .bookbar,html.map-full .totop{display:none}
 .cal-head .cal-nav{pointer-events:auto}
 .cal-mname{pointer-events:none}
 @media (pointer:coarse){
-  /* one month per row on touch screens, so every day is big enough to tap */
-  .cal-months{grid-template-columns:minmax(0,1fr)}
   .stepper button{flex:0 0 44px;min-height:44px}
 }
 
@@ -930,3 +928,25 @@ h1,h2,h3,h4{overflow-wrap:break-word}
 /* phones: email and mobile each get the full width; very narrow screens: every field full width */
 @media (max-width:720px){.row2.row-contact{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:380px){.bform .row2{grid-template-columns:minmax(0,1fr)}}
+
+/* calendar: two months side by side only when the calendar itself is wide enough, so every day stays easy to tap */
+.cal{container-type:inline-size}
+@media (pointer:coarse){@container (max-width:600px){.cal-months{grid-template-columns:minmax(0,1fr)}}}
+@container (max-width:400px){.cal-months{grid-template-columns:minmax(0,1fr)}}
+.cal-months>*{width:100%;max-width:460px;justify-self:center}
+
+/* phones held sideways (little height): floor plan uses the full height, room buttons in one scrolling row */
+@media (orientation:landscape) and (max-height:520px){
+  .pb-inner{padding:10px 64px 8px 12px;gap:6px;justify-content:flex-start}
+  .pb-title{font-size:.8rem}.pb-title b{font-size:1rem}
+  .pb-wrap{width:min(100%,calc((100vh - 112px) * var(--ar,1)))}
+  .pb-chips{width:100%}
+  .pb-chips .plan-chips{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .pb-chips .chip{flex:0 0 auto;min-height:34px;padding:6px 12px}
+  .pb-close{top:8px;right:8px;width:44px;height:44px}
+}
+
+/* the round "back to top" button steps aside while the favourites map is on screen */
+html.map-in-view .totop{opacity:0!important;pointer-events:none!important}
+/* very small phones: less inner padding around the calendar so each day is bigger */
+@media (max-width:400px){.bform{padding:12px}.cal{padding:10px 4px 8px}.cal-g{gap:1px}}

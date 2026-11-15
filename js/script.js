@@ -483,6 +483,8 @@ window.addEventListener("load", () => {
 /* ---------- back to top ---------- */
 const totop = document.getElementById("totop");
 totop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+{ const fm = document.querySelector(".fmap-wrap");
+  if (fm && "IntersectionObserver" in window) new IntersectionObserver((en) => document.documentElement.classList.toggle("map-in-view", en[0].isIntersecting), { threshold: 0.25 }).observe(fm); }
 window.addEventListener("scroll", () => totop.classList.toggle("show", window.scrollY > 1200), { passive: true });
 
 /* ---------- install as app ---------- */
