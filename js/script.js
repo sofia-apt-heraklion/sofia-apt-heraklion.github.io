@@ -399,7 +399,7 @@ form.addEventListener("submit", (e) => {
   const ctl = window.AbortController ? new AbortController() : null; const tm = setTimeout(() => ctl && ctl.abort(), 15000);
   // 1st choice: our own Google Apps Script (sends you the request and the guest a confirmation in their language)
   // 2nd choice: FormSubmit; last resort: the guest's email app
-  const viaFormSubmit = () => fetch("https://formsubmit.co/ajax/" + EMAIL, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(data), signal: ctl && ctl.signal })
+  const viaFormSubmit = () => fetch("https://formsubmit.co/ajax/8082a41d88223df15dba6f31ad77a571", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(data), signal: ctl && ctl.signal })
     .then((r) => r.json()).then((j) => { if (!(j && (j.success === true || j.success === "true"))) throw new Error("not sent"); });
   const viaScript = () => fetch(CONTACT.form, { method: "POST", body: JSON.stringify({
       apt, checkin: fin.value, checkout: fout.value, nights: n, guests: fg.value, name, email, phone, message: msg, lang: curLang(), _honey: fe["_honey"].value
