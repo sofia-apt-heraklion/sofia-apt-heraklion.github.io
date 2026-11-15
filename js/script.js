@@ -67,7 +67,7 @@ const LOCALE = () => (LANGS[curLang()] || LANGS.en)[1];
   const mo = new MutationObserver((ms) => { if (!D) return; ms.forEach((m) => { if (m.type === "characterData") { done.delete(m.target); trNode(m.target); } else if (m.type === "attributes") trNode(m.target); else m.addedNodes.forEach(trNode); }); });
   function loadDict(l) {
     if (window.I18N) return Promise.resolve(window.I18N[l]);
-    return new Promise((res) => { const s = document.createElement("script"); s.src = ROOT + "js/i18n.js?v=6"; s.onload = () => res(window.I18N && window.I18N[l]); s.onerror = () => res(null); document.head.appendChild(s); });
+    return new Promise((res) => { const s = document.createElement("script"); s.src = ROOT + "js/i18n.js?v=8"; s.onload = () => res(window.I18N && window.I18N[l]); s.onerror = () => res(null); document.head.appendChild(s); });
   }
   async function setLang(l, save) {
     if (!LANGS[l]) l = "en";
@@ -344,6 +344,45 @@ const fin = form.elements["in"], fout = form.elements["out"], fg = form.elements
 const iso = (d) => d.toISOString().slice(0, 10);
 const today = new Date(); fin.min = iso(today);
 const maxFor = () => ({ "Sofia 164": 4, "Sofia 264": 6 }[form.elements["apt"].value] || 10);
+// default guests per apartment (until the visitor changes the number themselves)
+const DEF_GUESTS = { "Sofia 164": 2, "Sofia 264": 4 };
+let guestsTouched = false;
+// country calling codes; names come from the browser in the page language
+const DIAL = "GR30 DE49 FR33 IT39 GB44 US1 NL31 BE32 AT43 CH41 CY357 IL972 ES34 PT351 IE353 DK45 SE46 NO47 FI358 PL48 CZ420 SK421 HU36 RO40 BG359 RS381 HR385 SI386 AL355 MK389 TR90 UA380 RU7 CA1 AU61 NZ64 AF93 DZ213 AD376 AO244 AR54 AM374 AZ994 BS1 BH973 BD880 BB1 BY375 BZ501 BJ229 BT975 BO591 BA387 BW267 BR55 BN673 BF226 BI257 KH855 CM237 CV238 CF236 TD235 CL56 CN86 CO57 KM269 CG242 CD243 CR506 CI225 CU53 DJ253 DM1 DO1 EC593 EG20 SV503 GQ240 ER291 EE372 SZ268 ET251 FJ679 GA241 GM220 GE995 GH233 GD1 GT502 GN224 GW245 GY592 HT509 HN504 HK852 IS354 IN91 ID62 IR98 IQ964 JM1 JP81 JO962 KZ7 KE254 KI686 XK383 KW965 KG996 LA856 LV371 LB961 LS266 LR231 LY218 LI423 LT370 LU352 MO853 MG261 MW265 MY60 MV960 ML223 MT356 MH692 MR222 MU230 MX52 FM691 MD373 MC377 MN976 ME382 MA212 MZ258 MM95 NA264 NR674 NP977 NI505 NE227 NG234 KP850 OM968 PK92 PW680 PS970 PA507 PG675 PY595 PE51 PH63 PR1 QA974 RW250 KN1 LC1 VC1 WS685 SM378 ST239 SA966 SN221 SC248 SL232 SG65 SB677 SO252 ZA27 KR82 SS211 LK94 SD249 SR597 SY963 TW886 TJ992 TZ255 TH66 TL670 TG228 TO676 TT1 TN216 TM993 TV688 UG256 AE971 UY598 UZ998 VU678 VA39 VE58 VN84 YE967 ZM260 ZW263 GI350 FO298 GL299 AW297 CW599 RE262 GP590 MQ596 NC687 PF689 BM1 KY1 VG1 AG1 AI1 MS1 TC1 GU1 VI1 JE44 GG44 IM44"
+  .split(" ").map((x) => [x.slice(0, 2), x.slice(2)]);
+const TOP_CC = ["GR", "DE", "FR", "IT", "GB", "US", "NL", "BE", "AT", "CH", "CY", "IL"];
+const ccSel = document.getElementById("ccSel"), ccShow = document.getElementById("ccShow");
+function buildCC() {
+  const lang = curLang(), keep = ccSel.value;
+  let names; try { names = new Intl.DisplayNames([lang], { type: "region" }); } catch (e) { names = null; }
+  const nm = (c) => { try { return (names && names.of(c)) || c; } catch (e) { return c; } };
+  const opt = ([c, d]) => `<option value="${c}" data-dial="+${d}">${nm(c)} (+${d})</option>`;
+  const top = DIAL.filter(([c]) => TOP_CC.includes(c)).sort((a, b) => TOP_CC.indexOf(a[0]) - TOP_CC.indexOf(b[0]));
+  const rest = DIAL.filter(([c]) => !TOP_CC.includes(c)).sort((a, b) => nm(a[0]).localeCompare(nm(b[0]), lang));
+  ccSel.innerHTML = top.map(opt).join("") + '<option disabled>──────────</option>' + rest.map(opt).join("");
+  if (keep) ccSel.value = keep;
+  else {
+    // Greek page → Greece; otherwise the country of the visitor's browser, else the page language's country
+    const fromLang = { el: "GR", de: "DE", fr: "FR", it: "IT", en: "GB" }[lang] || "GR";
+    let region = null;
+    // English page: any browser region (en-US → +1, de-DE → +49); other pages: only a browser region in the same language (de-AT → +43)
+    (navigator.languages || [navigator.language || ""]).some((l) => { const m = /^([a-z]{2,3})-([A-Z]{2})$/i.exec(l || ""); if (m && (lang === "en" || m[1].toLowerCase() === lang)) { region = m[2].toUpperCase(); return true; } return false; });
+    ccSel.value = lang === "el" ? "GR" : (region && DIAL.some(([c]) => c === region) ? region : fromLang);
+  }
+  showCC();
+}
+function showCC() { const o = ccSel.selectedOptions[0]; ccShow.textContent = o ? o.dataset.dial : "+"; }
+ccSel.addEventListener("change", () => { showCC(); ccSel.closest(".cc-wrap").classList.remove("err"); });
+buildCC();
+document.addEventListener("langchange", () => setTimeout(buildCC, 0));
+// full international number, or "" if it does not look like a phone number
+function fullPhone() {
+  let v = form.elements["phone"].value.trim();
+  if (v.startsWith("+") || v.startsWith("00")) { const d = v.replace(/^00/, "").replace(/\D/g, ""); return d.length >= 8 && d.length <= 15 ? "+" + d : ""; }
+  let d = v.replace(/\D/g, "");
+  if (ccSel.value !== "IT") d = d.replace(/^0+/, "");
+  return d.length >= 6 && d.length <= 14 ? `${ccShow.textContent} ${d}` : "";
+}
 function nights() {
   const el = document.getElementById("nights");
   if (fin.value && fout.value) {
@@ -360,9 +399,16 @@ fin.addEventListener("change", () => {
 fout.addEventListener("change", nights);
 document.addEventListener("langchange", () => setTimeout(nights, 0));
 form.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", () => {
+  guestsTouched = true;
   fg.value = Math.max(1, Math.min(maxFor(), (+fg.value || 1) + +b.dataset.step));
 }));
-form.querySelectorAll('input[name="apt"]').forEach((r) => r.addEventListener("change", () => { fg.max = maxFor(); if (+fg.value > maxFor()) fg.value = maxFor(); }));
+fg.addEventListener("input", () => (guestsTouched = true));
+form.querySelectorAll('input[name="apt"]').forEach((r) => r.addEventListener("change", () => {
+  fg.max = maxFor();
+  const a = form.elements["apt"].value;
+  if (!guestsTouched) fg.value = DEF_GUESTS[a] || 6;
+  if (+fg.value > maxFor()) fg.value = maxFor();
+}));
 document.querySelectorAll("[data-pick]").forEach((a) => a.addEventListener("click", () => {
   const r = form.querySelector(`input[name="apt"][value="Sofia ${a.dataset.pick}"]`); if (r) { r.checked = true; r.dispatchEvent(new Event("change")); }
 }));
@@ -370,7 +416,7 @@ const done = document.getElementById("bookDone");
 document.getElementById("bookAgain").addEventListener("click", () => { done.hidden = true; form.hidden = false; form.elements["msg"].value = ""; });
 form.addEventListener("submit", (e) => {
   e.preventDefault();
-  const fe = form.elements, name = fe["name"].value.trim(), email = fe["email"].value.trim(), phone = fe["phone"].value.trim(), msg = fe["msg"].value.trim();
+  const fe = form.elements, name = fe["name"].value.trim(), email = fe["email"].value.trim(), phone = fullPhone(), msg = fe["msg"].value.trim();
   const okMail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
   [fin, fout].forEach((f) => f.classList.toggle("err", !f.value));
   fe["name"].classList.toggle("err", !name); fe["email"].classList.toggle("err", !okMail);
@@ -378,6 +424,8 @@ form.addEventListener("submit", (e) => {
   if (!fin.value || !fout.value || n <= 0) { toast(t("Please choose your dates", "Επιλέξτε ημερομηνίες")); return; }
   if (!name) { toast(t("Please write your name", "Γράψτε το όνομά σας")); fe["name"].focus(); return; }
   if (!okMail) { toast(t("Please check your email address", "Ελέγξτε τη διεύθυνση email")); fe["email"].focus(); return; }
+  fe["phone"].classList.toggle("err", !phone);
+  if (!phone) { toast(t("Please enter your mobile number", "Γράψτε τον αριθμό του κινητού σας")); fe["phone"].focus(); return; }
   if (fe["_honey"].value) return;
   const apt = fe["apt"].value;
   const fmt = (v) => new Date(v).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
@@ -386,7 +434,7 @@ form.addEventListener("submit", (e) => {
     _subject: `Booking request: ${apt}, ${fin.value} to ${fout.value} (${name})`,
     _template: "table", _captcha: "false",
     Apartment: apt, "Check-in": fmt(fin.value), "Check-out": fmt(fout.value), Nights: n, Guests: fg.value,
-    Name: name, email, Phone: phone || "-", Message: msg || "-",
+    Name: name, email, Phone: phone, Message: msg || "-",
     Language: langName
   };
   const btn = form.querySelector(".submit"); btn.disabled = true; btn.classList.add("busy");

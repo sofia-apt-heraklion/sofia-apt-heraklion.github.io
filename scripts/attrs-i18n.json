@@ -71,7 +71,9 @@
   "Where am I?": "Πού είμαι;",
   "World map of guests' countries": "Παγκόσμιος χάρτης με τις χώρες των επισκεπτών μας",
   "minus": "μείον",
-  "plus": "συν"
+  "plus": "συν",
+  "Country code": "Κωδικός χώρας",
+  "Mobile phone": "Κινητό τηλέφωνο"
  },
  "de": {
   "4K Smart TV and full-length mirror": "4K-Smart-TV und Ganzkörperspiegel",
@@ -145,7 +147,9 @@
   "Where am I?": "Wo bin ich?",
   "World map of guests' countries": "Weltkarte mit den Herkunftsländern unserer Gäste",
   "minus": "weniger",
-  "plus": "mehr"
+  "plus": "mehr",
+  "Country code": "Ländervorwahl",
+  "Mobile phone": "Handynummer"
  },
  "fr": {
   "4K Smart TV and full-length mirror": "Smart TV 4K et miroir en pied",
@@ -219,7 +223,9 @@
   "Where am I?": "Où suis-je ?",
   "World map of guests' countries": "Carte du monde des pays de nos voyageurs",
   "minus": "moins",
-  "plus": "plus"
+  "plus": "plus",
+  "Country code": "Indicatif du pays",
+  "Mobile phone": "Téléphone portable"
  },
  "it": {
   "4K Smart TV and full-length mirror": "Smart TV 4K e specchio a figura intera",
@@ -293,6 +299,8 @@
   "Where am I?": "Dove sono?",
   "World map of guests' countries": "Mappa del mondo dei paesi dei nostri ospiti",
   "minus": "meno",
-  "plus": "più"
+  "plus": "più",
+  "Country code": "Prefisso internazionale",
+  "Mobile phone": "Cellulare"
  }
 }
