@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sofia-apt-heraklion.github.io/sitemap.xml

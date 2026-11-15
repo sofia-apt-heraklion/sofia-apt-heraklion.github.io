@@ -6,11 +6,17 @@
 const CONTACT = {
   phone: "+306972777487",
   whatsapp: "",
-  email: "sofia.apt.heraklion@gmail.com"
+  email: "sofia.apt.heraklion@gmail.com",
+  // Web app address of the Google Apps Script booking form (scripts/google-apps-script/booking-form.gs).
+  // When it is filled in, guests also get an automatic confirmation email in their language.
+  // Leave it empty ("") and requests are sent through FormSubmit instead.
+  form: ""
 };
 
 /* ---------- language: English and Greek are in the page; German, French, Italian come from js/i18n.js ---------- */
 const LANGS = { en: ["EN", "en-GB"], el: ["ΕΛ", "el-GR"], de: ["DE", "de-DE"], fr: ["FR", "fr-FR"], it: ["IT", "it-IT"] };
+const ROOT = document.documentElement.dataset.root || "";          // "../" on the language pages
+const PAGE_LANG = document.documentElement.dataset.pageLang || "en";
 const curLang = () => document.documentElement.lang;
 const LOCALE = () => (LANGS[curLang()] || LANGS.en)[1];
 (function () {
@@ -23,7 +29,17 @@ const LOCALE = () => (LANGS[curLang()] || LANGS.en)[1];
     const t = s.trim(); if (!t) return s;
     if (D.text[t] != null) return s.replace(t, D.text[t]);
     for (const [re, rep] of D.pat) { const r = new RegExp(re); if (r.test(t)) { const m = t.match(r); return s.replace(t, rep.replace(/\$(\d)/g, (_, i) => { const g = m[+i]; return D.text[g] != null ? D.text[g] : g; })); } }
-    if (t.includes(" · ")) { const parts = segs(t).map((p) => trText(p)); const j = parts.join(" · "); if (j !== t) return s.replace(t, j); }
+    if (t.includes(" · ")) {
+      // translate the longest run of " · " pieces that the dictionary knows, then the rest piece by piece
+      const p = segs(t), outp = [];
+      for (let i = 0; i < p.length;) {
+        let k = p.length;
+        for (; k > i + 1; k--) { const key = p.slice(i, k).join(" · "); if (D.text[key] != null) break; }
+        const key = p.slice(i, k).join(" · ");
+        outp.push(D.text[key] != null ? D.text[key] : trText(key)); i = k;
+      }
+      const j = outp.join(" · "); if (j !== t) return s.replace(t, j);
+    }
     return s;
   }
   function trNode(n) {
@@ -51,7 +67,7 @@ const LOCALE = () => (LANGS[curLang()] || LANGS.en)[1];
   const mo = new MutationObserver((ms) => { if (!D) return; ms.forEach((m) => { if (m.type === "characterData") { done.delete(m.target); trNode(m.target); } else if (m.type === "attributes") trNode(m.target); else m.addedNodes.forEach(trNode); }); });
   function loadDict(l) {
     if (window.I18N) return Promise.resolve(window.I18N[l]);
-    return new Promise((res) => { const s = document.createElement("script"); s.src = "js/i18n.js?v=2"; s.onload = () => res(window.I18N && window.I18N[l]); s.onerror = () => res(null); document.head.appendChild(s); });
+    return new Promise((res) => { const s = document.createElement("script"); s.src = ROOT + "js/i18n.js?v=6"; s.onload = () => res(window.I18N && window.I18N[l]); s.onerror = () => res(null); document.head.appendChild(s); });
   }
   async function setLang(l, save) {
     if (!LANGS[l]) l = "en";
@@ -69,15 +85,20 @@ const LOCALE = () => (LANGS[curLang()] || LANGS.en)[1];
   }
   const open = (o) => { menu.hidden = !o; btn.setAttribute("aria-expanded", o); };
   btn.addEventListener("click", (e) => { e.stopPropagation(); open(menu.hidden); });
-  menu.addEventListener("click", (e) => { const b = e.target.closest("[data-lang]"); if (!b) return; open(false); setLang(b.dataset.lang, true); });
+  // each language has its own page: / (English), /el/, /de/, /fr/, /it/
+  const urlFor = (l) => new URL(ROOT + (l === "en" ? "" : l + "/"), location.href).href + location.hash;
+  menu.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-lang]"); if (!b) return; open(false);
+    const l = b.dataset.lang; try { localStorage.setItem("lang", l); } catch (err) {}
+    if (/^https?:/.test(location.protocol)) { if (l !== PAGE_LANG) location.href = urlFor(l); }
+    else setLang(l, true);
+  });
   document.addEventListener("click", (e) => { if (!menu.hidden && !e.target.closest(".lang-wrap")) open(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) open(false); });
-  let l = null;
-  try { l = localStorage.getItem("lang"); } catch (e) {}
-  if (!l) { const n = (navigator.language || "en").slice(0, 2).toLowerCase(); l = LANGS[n] ? n : "en"; }
-  root.lang = LANGS[l] ? l : "en";
-  document.getElementById("langCur").textContent = (LANGS[root.lang] || LANGS.en)[0];
-  if (root.lang !== "en" && root.lang !== "el") addEventListener("DOMContentLoaded", () => setLang(root.lang, false));
+  root.lang = PAGE_LANG;
+  document.getElementById("langCur").textContent = LANGS[PAGE_LANG][0];
+  menu.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-checked", b.dataset.lang === PAGE_LANG));
+  if (PAGE_LANG !== "en" && PAGE_LANG !== "el") addEventListener("DOMContentLoaded", () => setLang(PAGE_LANG, false));
   window.setLang = setLang;
 })();
 
@@ -94,6 +115,7 @@ document.querySelectorAll("[data-contact]").forEach((a) => {
   if (kind === "phone") a.href = "tel:" + v;
   if (kind === "whatsapp") { a.href = "https://wa.me/" + v.replace(/[^0-9]/g, ""); a.target = "_blank"; a.rel = "noopener"; }
   if (kind === "email") a.href = "mailto:" + v;
+  if (!a.dataset.goatcounterClick) a.dataset.goatcounterClick = "contact-" + kind;
 });
 
 document.getElementById("year").textContent = new Date().getFullYear();
@@ -317,7 +339,7 @@ async function share(hash) {
 document.getElementById("shareBtn").addEventListener("click", () => share(""));
 document.querySelectorAll("[data-share]").forEach((b) => b.addEventListener("click", () => share(b.dataset.share)));
 
-/* ---------- booking form ---------- */
+/* ---------- booking form: price calculator + request sent from the page ---------- */
 const form = document.getElementById("bookForm");
 const fin = form.elements["in"], fout = form.elements["out"], fg = form.elements["guests"];
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -337,6 +359,7 @@ fin.addEventListener("change", () => {
   nights();
 });
 fout.addEventListener("change", nights);
+document.addEventListener("langchange", () => setTimeout(nights, 0));
 form.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", () => {
   fg.value = Math.max(1, Math.min(maxFor(), (+fg.value || 1) + +b.dataset.step));
 }));
@@ -344,19 +367,53 @@ form.querySelectorAll('input[name="apt"]').forEach((r) => r.addEventListener("ch
 document.querySelectorAll("[data-pick]").forEach((a) => a.addEventListener("click", () => {
   const r = form.querySelector(`input[name="apt"][value="Sofia ${a.dataset.pick}"]`); if (r) { r.checked = true; r.dispatchEvent(new Event("change")); }
 }));
+const done = document.getElementById("bookDone");
+document.getElementById("bookAgain").addEventListener("click", () => { done.hidden = true; form.hidden = false; form.elements["msg"].value = ""; });
 form.addEventListener("submit", (e) => {
   e.preventDefault();
+  const fe = form.elements, name = fe["name"].value.trim(), email = fe["email"].value.trim(), phone = fe["phone"].value.trim(), msg = fe["msg"].value.trim();
+  const okMail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
   [fin, fout].forEach((f) => f.classList.toggle("err", !f.value));
+  fe["name"].classList.toggle("err", !name); fe["email"].classList.toggle("err", !okMail);
   const n = nights();
   if (!fin.value || !fout.value || n <= 0) { toast(t("Please choose your dates", "Επιλέξτε ημερομηνίες")); return; }
-  const apt = form.elements["apt"].value, name = form.elements["name"].value.trim(), msg = form.elements["msg"].value.trim();
-  const fmt = (v) => new Date(v).toLocaleDateString(t("en-GB", "el-GR"), { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-  const subject = t(`Booking request: ${apt}, ${fin.value} to ${fout.value}`, `Αίτημα κράτησης: ${apt}, ${fin.value} έως ${fout.value}`);
-  const body = t(
-    `Hello Sofia,\n\nI would like to book:\n\nApartment: ${apt}\nCheck-in: ${fmt(fin.value)}\nCheck-out: ${fmt(fout.value)}\nNights: ${n}\nGuests: ${fg.value}\n${msg ? "\n" + msg + "\n" : ""}\nThank you,\n${name}`,
-    `Γεια σας Σοφία,\n\nΘα ήθελα να κάνω κράτηση:\n\nΔιαμέρισμα: ${apt}\nΆφιξη: ${fmt(fin.value)}\nΑναχώρηση: ${fmt(fout.value)}\nΔιανυκτερεύσεις: ${n}\nΆτομα: ${fg.value}\n${msg ? "\n" + msg + "\n" : ""}\nΕυχαριστώ,\n${name}`);
-  location.href = mailto(subject, body);
-  toast(t("Opening your email app…", "Ανοίγει το email σας…"));
+  if (!name) { toast(t("Please write your name", "Γράψτε το όνομά σας")); fe["name"].focus(); return; }
+  if (!okMail) { toast(t("Please check your email address", "Ελέγξτε τη διεύθυνση email")); fe["email"].focus(); return; }
+  if (fe["_honey"].value) return;
+  const apt = fe["apt"].value;
+  const fmt = (v) => new Date(v).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const langName = { en: "English", el: "Greek", de: "German", fr: "French", it: "Italian" }[curLang()] || curLang();
+  const data = {
+    _subject: `Booking request: ${apt}, ${fin.value} to ${fout.value} (${name})`,
+    _template: "table", _captcha: "false",
+    Apartment: apt, "Check-in": fmt(fin.value), "Check-out": fmt(fout.value), Nights: n, Guests: fg.value,
+    Name: name, email, Phone: phone || "-", Message: msg || "-",
+    Language: langName
+  };
+  const btn = form.querySelector(".submit"); btn.disabled = true; btn.classList.add("busy");
+  const mailFallback = () => {
+    const body = `Hello Sofia,\n\nI would like to book:\n\nApartment: ${apt}\nCheck-in: ${fmt(fin.value)}\nCheck-out: ${fmt(fout.value)}\nNights: ${n}\nGuests: ${fg.value}\n${phone ? "Mobile: " + phone + "\n" : ""}${msg ? "\n" + msg + "\n" : ""}\nThank you,\n${name}`;
+    location.href = mailto(data._subject, body);
+    toast(t("Opening your email app…", "Ανοίγει το email σας…"));
+  };
+  const ctl = window.AbortController ? new AbortController() : null; const tm = setTimeout(() => ctl && ctl.abort(), 15000);
+  // 1st choice: our own Google Apps Script (sends you the request and the guest a confirmation in their language)
+  // 2nd choice: FormSubmit; last resort: the guest's email app
+  const viaFormSubmit = () => fetch("https://formsubmit.co/ajax/" + EMAIL, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(data), signal: ctl && ctl.signal })
+    .then((r) => r.json()).then((j) => { if (!(j && (j.success === true || j.success === "true"))) throw new Error("not sent"); });
+  const viaScript = () => fetch(CONTACT.form, { method: "POST", body: JSON.stringify({
+      apt, checkin: fin.value, checkout: fout.value, nights: n, guests: fg.value, name, email, phone, message: msg, lang: curLang(), _honey: fe["_honey"].value
+    }), signal: ctl && ctl.signal })
+    .then((r) => r.json()).then((j) => { if (!(j && j.ok)) throw new Error("not sent"); });
+  (CONTACT.form ? viaScript().catch(viaFormSubmit) : viaFormSubmit())
+    .then(() => {
+      document.getElementById("bookSum").textContent = `${apt} · ${new Date(fin.value).toLocaleDateString(LOCALE(), { day: "numeric", month: "short" })} – ${new Date(fout.value).toLocaleDateString(LOCALE(), { day: "numeric", month: "short", year: "numeric" })} · ${fg.value} ${t("guests", "άτομα")}`;
+      clearTimeout(toast._t); document.getElementById("toast").classList.remove("show");
+      form.hidden = true; done.hidden = false; done.focus();
+      if (window.goatcounter && goatcounter.count) goatcounter.count({ path: "booking-request-sent", title: "Booking request sent", event: true });
+    })
+    .catch(mailFallback)
+    .finally(() => { clearTimeout(tm); btn.disabled = false; btn.classList.remove("busy"); });
 });
 
 /* ---------- vCard ---------- */
@@ -386,7 +443,7 @@ window.addEventListener("scroll", () => totop.classList.toggle("show", window.sc
 let deferred = null; const installBtn = document.getElementById("installBtn");
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e; installBtn.hidden = false; });
 installBtn.addEventListener("click", async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; installBtn.hidden = true; });
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register(ROOT + "sw.js").catch(() => {});
 
 /* ---------- favourite places: list + interactive map ---------- */
 (function () {
@@ -640,7 +697,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   if (window.fetch && /^https?:/.test(location.protocol)) {
     const get = (u) => fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject()));
     get("https://raw.githubusercontent.com/sofia-apt-heraklion/sofia-apt-heraklion.github.io/main/routes.json")
-      .catch(() => get("routes.json")).then((d) => { ROUTES = d || {}; renderList(); }).catch(() => {});
+      .catch(() => get(ROOT + "routes.json")).then((d) => { ROUTES = d || {}; renderList(); }).catch(() => {});
   }
   const lt = document.getElementById("langToggle");
   document.addEventListener("langchange", () => setTimeout(() => {
@@ -792,7 +849,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   top.addEventListener("pointerleave", hide);
   list();
   // load the map only when the section gets close
-  const load = () => { if (window.WORLD) return draw(); const s = document.createElement("script"); s.src = "js/worldmap.js?v=2"; s.onload = draw; document.head.appendChild(s); };
+  const load = () => { if (window.WORLD) return draw(); const s = document.createElement("script"); s.src = ROOT + "js/worldmap.js?v=2"; s.onload = draw; document.head.appendChild(s); };
   if ("IntersectionObserver" in window) {
     const io = new IntersectionObserver((en) => { if (en.some((x) => x.isIntersecting)) { io.disconnect(); load(); } }, { rootMargin: "600px" });
     io.observe(box);
@@ -910,7 +967,26 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   const RAW = "https://raw.githubusercontent.com/sofia-apt-heraklion/sofia-apt-heraklion.github.io/main/availability.json";
   const get = (u) => fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject()));
   if (/^https?:/.test(location.protocol) && window.fetch)
-    get(RAW).catch(() => get("availability.json")).then((d) => { data = d; showUpdated(); render(); cal.classList.add("synced"); }).catch(() => {});
+    get(RAW).catch(() => get(ROOT + "availability.json")).then((d) => { data = d; showUpdated(); render(); cal.classList.add("synced"); freeWeekend(); }).catch(() => {});
+  // "Free this weekend": Friday and Saturday night free, shown under the hero buttons
+  function freeWeekend() {
+    const box = document.getElementById("freeWk"); if (!box || !data) return;
+    const fri = new Date(T0); const dow = fri.getDay();
+    fri.setDate(fri.getDate() + (dow === 6 ? 6 : dow === 0 ? 5 : 5 - dow));
+    const sat = new Date(fri); sat.setDate(sat.getDate() + 1); const sun = new Date(fri); sun.setDate(sun.getDate() + 2);
+    const free = ["Sofia 164", "Sofia 264"].filter((a) => { const b = nightsOf(a); return !b.has(key(fri)) && !b.has(key(sat)); });
+    if (!free.length) { box.hidden = true; return; }
+    const f = (d, o) => d.toLocaleDateString(LOCALE(), o);
+    box.innerHTML = `<span class="fw-dot" aria-hidden="true"></span><span class="fw-t"><b>${t("Free this weekend", "Ελεύθερο αυτό το Σαββατοκύριακο")}</b> <span class="fw-d">${f(fri, { weekday: "short", day: "numeric" })} – ${f(sun, { weekday: "short", day: "numeric", month: "short" })}</span></span>` +
+      free.map((a) => `<button type="button" class="fw-apt" data-apt="${a}">${a}<svg class="ic" aria-hidden="true"><use href="#i-chev-r"/></svg></button>`).join("");
+    box.hidden = false;
+    box.querySelectorAll(".fw-apt").forEach((b) => b.addEventListener("click", () => {
+      const r = form.querySelector(`input[name="apt"][value="${b.dataset.apt}"]`); if (r) { r.checked = true; r.dispatchEvent(new Event("change")); }
+      fin.value = key(fri); fin.dispatchEvent(new Event("change")); fout.value = key(sun); fout.dispatchEvent(new Event("change"));
+      document.getElementById("book").scrollIntoView({ behavior: "smooth" });
+    }));
+  }
+  document.addEventListener("langchange", () => setTimeout(freeWeekend, 0));
   document.addEventListener("langchange", () => setTimeout(showUpdated, 0));
 })();
 

@@ -1,3 +1,7 @@
+/* fonts are served from this site (no Google Fonts) */
+@font-face{font-family:"Inter";src:url(../fonts/inter.woff2) format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
+@font-face{font-family:"Lora";src:url(../fonts/lora.woff2) format("woff2");font-weight:500 600;font-style:normal;font-display:swap}
+@font-face{font-family:"Lora";src:url(../fonts/lora-italic.woff2) format("woff2");font-weight:500;font-style:italic;font-display:swap}
 :root{
   --bg:#f6f3ee; --paper:#fffdf9; --ink:#2b2b2b; --soft:#6b6460; --line:#e6dfd4;
   --accent:#b8894c; --accent-2:#c9a46a; --teal:#4f7f78; --dark:#23211f;
@@ -849,3 +853,68 @@ html.map-full .bookbar,html.map-full .totop{display:none}
 .lang-menu button[aria-checked="true"]{background:#f1ebe2;font-weight:600}
 .lang-menu button[aria-checked="true"] b{color:var(--accent)}
 @media (max-width:860px){.lang-wrap{margin-left:8px}}
+
+/* ===== AMA chip ===== */
+.facts>.ama{font-size:.78rem;color:var(--soft);border-style:dashed;letter-spacing:.02em}
+
+.hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;opacity:0}
+.bform input.err,.bform textarea.err{border-color:#c0533a;box-shadow:0 0 0 3px rgba(192,83,58,.12)}
+.btn.submit.busy{opacity:.7;pointer-events:none}
+.btn.submit.busy .ic{animation:fly 1s ease-in-out infinite}
+@keyframes fly{50%{transform:translate(4px,-4px)}}
+
+/* ===== request sent ===== */
+.bdone{background:#fff;border:1px solid var(--line);border-radius:22px;padding:34px 28px;text-align:center;box-shadow:0 18px 40px rgba(0,0,0,.06);align-self:start;animation:qin .45s ease;outline:none}
+.bdone[hidden]{display:none}
+.bdone .fic{margin:0 auto 14px;display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#e7efe6;color:#3f6b4a}
+.bdone .fic .ic{width:26px;height:26px}
+.bdone h3{font-family:var(--serif);font-weight:400;font-size:1.6rem;margin:0 0 8px}
+.bdone p{color:var(--soft);margin:0 auto 12px;max-width:42ch}
+.bdone .bdone-sum{color:var(--ink);font-weight:600}
+.fguides{margin-top:10px}
+.foot-links a{color:inherit;text-underline-offset:3px}
+@keyframes qin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ===== free this weekend ===== */
+.freewk{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:18px;padding:8px 8px 8px 14px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:.9rem;width:fit-content;max-width:100%;animation:qin .5s ease}
+.freewk[hidden]{display:none}
+.fw-dot{width:9px;height:9px;border-radius:50%;background:#7fd19b;box-shadow:0 0 0 0 rgba(127,209,155,.7);animation:fwp 2s infinite}
+@keyframes fwp{70%{box-shadow:0 0 0 9px rgba(127,209,155,0)}100%{box-shadow:0 0 0 0 rgba(127,209,155,0)}}
+.fw-t b{font-weight:600}
+.fw-d{opacity:.85;white-space:nowrap}
+.fw-apt{display:inline-flex;align-items:center;gap:4px;border:0;background:#fff;color:var(--dark);font:600 .82rem var(--sans);padding:7px 10px 7px 12px;border-radius:99px;cursor:pointer;transition:transform .2s}
+.fw-apt:hover{transform:translateY(-2px)}
+.fw-apt .ic{width:14px;height:14px}
+@media (max-width:560px){.freewk{font-size:.84rem}}
+.privacy-note a{color:inherit}
+
+/* ===== long country names wrap instead of being cut ===== */
+.gm-top li>span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3}
+
+/* ===== bigger tap targets on touch screens ===== */
+@media (pointer:coarse){
+  .fpanel .ftab,.ftab{min-height:40px;padding-top:8px;padding-bottom:8px}
+  .gm-zoom button{min-height:36px;padding:8px 14px}
+  .maplink{display:inline-flex;align-items:center;min-height:40px}
+  .rv-apt{display:inline-flex;align-items:center;min-height:34px;padding:6px 12px}
+  .fw-apt{min-height:38px}
+  .plan-chips .chip,.chip{min-height:38px}
+}
+
+/* ===== calendar arrows must stay clickable above the month names ===== */
+.cal-head{position:relative;z-index:2;pointer-events:none}
+.cal-head .cal-nav{pointer-events:auto}
+.cal-mname{pointer-events:none}
+@media (pointer:coarse){
+  /* one month per row on touch screens, so every day is big enough to tap */
+  .cal-months{grid-template-columns:minmax(0,1fr)}
+  .stepper button{flex:0 0 44px;min-height:44px}
+}
+
+/* ===== long words (German, French) never run off narrow screens ===== */
+h1,h2,h3,h4{overflow-wrap:break-word}
+@media (max-width:400px){h1,h2,h3{hyphens:auto;-webkit-hyphens:auto}}
+@media (max-width:360px){
+  .hero h1{font-size:clamp(1.65rem,9vw,2.1rem)}
+  h2{font-size:clamp(1.45rem,7.6vw,1.9rem)}
+}

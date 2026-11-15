@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found · Sofia Apartments</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/images/icons/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<meta name="theme-color" content="#f6f3ee">
+<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/guide.css?v=3">
+<style>
+.nf{min-height:calc(100vh - 140px);display:grid;place-items:center;text-align:center;padding:40px 22px}
+.nf-in{max-width:520px}
+.nf-num{font-family:var(--serif);font-size:clamp(4.5rem,18vw,7.5rem);line-height:1;color:var(--accent);margin:0 0 6px}
+.nf h1{font-size:clamp(1.7rem,5vw,2.3rem);margin:0 0 12px}
+.nf p{color:var(--soft)}
+.nf .btn{margin:8px 4px 0}
+.nf-logo{height:64px;width:auto;margin:0 auto 26px}
+</style>
+</head>
+<body>
+<main class="nf"><div class="nf-in">
+  <img class="nf-logo" src="/images/logo/site-logo-light.svg" alt="Sofia Apartments" width="430" height="112">
+  <p class="nf-num">404</p>
+  <h1 id="nfT">Page not found</h1>
+  <p id="nfP">This page doesn’t exist or has moved. Everything about our two apartments is on the home page.</p>
+  <a class="btn" id="nfHome" href="/">Go to the home page</a> <a class="btn ghost" id="nfGuide" href="/guide/">City guides</a>
+</div></main>
+<script>
+(function(){
+  var T={"en": ["Page not found", "This page doesn’t exist or has moved. Everything about our two apartments is on the home page.", "Go to the home page", "City guides", ""], "el": ["Η σελίδα δεν βρέθηκε", "Η σελίδα δεν υπάρχει ή έχει μετακινηθεί. Όλα για τα δύο διαμερίσματά μας θα τα βρείτε στην αρχική σελίδα.", "Στην αρχική σελίδα", "Οδηγοί πόλης", "/el"], "de": ["Seite nicht gefunden", "Diese Seite gibt es nicht oder sie wurde verschoben. Alles über unsere zwei Wohnungen finden Sie auf der Startseite.", "Zur Startseite", "Stadtführer", "/de"], "fr": ["Page introuvable", "Cette page n’existe pas ou a été déplacée. Tout sur nos deux appartements se trouve sur la page d’accueil.", "Aller à l’accueil", "Guides de la ville", "/fr"], "it": ["Pagina non trovata", "Questa pagina non esiste o è stata spostata. Tutto sui nostri due appartamenti è nella home page.", "Vai alla home page", "Guide della città", "/it"]};
+  var m=location.pathname.match(/^\/(el|de|fr|it)(\/|$)/), l=m?m[1]:null;
+  if(!l){try{l=localStorage.getItem("lang")}catch(e){}}
+  if(!l){var n=(navigator.language||"en").slice(0,2).toLowerCase();l=T[n]?n:"en"}
+  if(!T[l])l="en";
+  var t=T[l];document.documentElement.lang=l;document.title=t[0]+" · Sofia Apartments";
+  document.getElementById("nfT").textContent=t[0];document.getElementById("nfP").textContent=t[1];
+  var h=document.getElementById("nfHome");h.textContent=t[2];h.href=t[4]+"/";
+  var g=document.getElementById("nfGuide");g.textContent=t[3];g.href=t[4]+"/guide/";
+})();
+</script>
+</body>
+</html>
