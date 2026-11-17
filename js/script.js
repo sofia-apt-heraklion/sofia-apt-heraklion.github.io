@@ -432,6 +432,7 @@ form.addEventListener("submit", (e) => {
   const langName = { en: "English", el: "Greek", de: "German", fr: "French", it: "Italian" }[curLang()] || curLang();
   const data = {
     _subject: `Booking request: ${apt}, ${fin.value} to ${fout.value} (${name})`,
+    _cc: ["iasonas.mast", "gmail.com"].join("@"),
     _template: "table", _captcha: "false",
     Apartment: apt, "Check-in": fmt(fin.value), "Check-out": fmt(fout.value), Nights: n, Guests: fg.value,
     Name: name, email, Phone: phone, Message: msg || "-",

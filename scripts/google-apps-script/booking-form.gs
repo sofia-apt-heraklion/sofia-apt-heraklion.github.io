@@ -11,6 +11,7 @@
  * --------------------------------------------------------------
  */
 var HOST_EMAIL = "sofia.apt.heraklion@gmail.com";
+var HOST_COPY = "iasonas.mast@gmail.com";   // every booking request is also copied here (leave "" for none)
 var SENDER_NAME = "Sofia Apartments";
 var MAX_PER_DAY = 40;             // safety limit against abuse
 
@@ -41,7 +42,7 @@ function doPost(e) {
       "Apartment: " + apt + "\nCheck-in: " + d.checkin + "\nCheck-out: " + d.checkout + "\nNights: " + nights + "\nGuests: " + guests +
       "\n\nName: " + name + "\nEmail: " + email + "\nMobile: " + (phone || "-") + "\nLanguage: " + L.toUpperCase() +
       "\n\nMessage:\n" + (msg || "-") + "\n\n(Press Reply to answer the guest.)";
-    GmailApp.sendEmail(HOST_EMAIL, "Booking request: " + apt + ", " + d.checkin + " to " + d.checkout + " (" + name + ")", hostBody, { replyTo: email, name: "Sofia Apartments website" });
+    GmailApp.sendEmail(HOST_EMAIL, "Booking request: " + apt + ", " + d.checkin + " to " + d.checkout + " (" + name + ")", hostBody, { replyTo: email, name: "Sofia Apartments website", cc: HOST_COPY || undefined });
 
     // 2. automatic confirmation to the guest, in their language
     var fmt = function (s) { var p = s.split("-"); return Utilities.formatDate(new Date(+p[0], +p[1] - 1, +p[2], 12), "Europe/Athens", "dd/MM/yyyy"); };
