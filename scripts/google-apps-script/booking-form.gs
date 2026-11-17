@@ -30,6 +30,13 @@ function doPost(e) {
     var email = clean(d.email, 120), name = clean(d.name, 60);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || !name) return out({ ok: false, error: "invalid" });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.checkin || "") || !/^\d{4}-\d{2}-\d{2}$/.test(d.checkout || "")) return out({ ok: false, error: "dates" });
+    // the same checks as on the website, so nobody can skip them
+    var phoneDigits = String(d.phone || "").replace(/\D/g, "");
+    if (phoneDigits.length < 8 || phoneDigits.length > 15) return out({ ok: false, error: "phone" });
+    if ((String(d.name || "").match(/\p{L}/gu) || []).length < 2 || /[@<>]|https?:|www\./i.test(d.name)) return out({ ok: false, error: "name" });
+    var din = new Date(d.checkin + "T12:00:00"), dout = new Date(d.checkout + "T12:00:00"), today = new Date(); today.setHours(0, 0, 0, 0);
+    var nn = Math.round((dout - din) / 864e5);
+    if (din < today || nn < 1 || nn > 60) return out({ ok: false, error: "dates" });
     if (!underLimit()) return out({ ok: false, error: "limit" });
 
     var L = T[d.lang] ? d.lang : "en", t = T[L];

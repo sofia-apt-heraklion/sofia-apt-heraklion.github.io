@@ -67,7 +67,7 @@ const LOCALE = () => (LANGS[curLang()] || LANGS.en)[1];
   const mo = new MutationObserver((ms) => { if (!D) return; ms.forEach((m) => { if (m.type === "characterData") { done.delete(m.target); trNode(m.target); } else if (m.type === "attributes") trNode(m.target); else m.addedNodes.forEach(trNode); }); });
   function loadDict(l) {
     if (window.I18N) return Promise.resolve(window.I18N[l]);
-    return new Promise((res) => { const s = document.createElement("script"); s.src = ROOT + "js/i18n.js?v=8"; s.onload = () => res(window.I18N && window.I18N[l]); s.onerror = () => res(null); document.head.appendChild(s); });
+    return new Promise((res) => { const s = document.createElement("script"); s.src = ROOT + "js/i18n.js?v=9"; s.onload = () => res(window.I18N && window.I18N[l]); s.onerror = () => res(null); document.head.appendChild(s); });
   }
   async function setLang(l, save) {
     if (!LANGS[l]) l = "en";
@@ -376,7 +376,7 @@ ccSel.addEventListener("change", () => { showCC(); ccSel.closest(".cc-wrap").cla
 buildCC();
 document.addEventListener("langchange", () => setTimeout(buildCC, 0));
 // full international number, or "" if it does not look like a phone number
-function fullPhone() {
+let fullPhone = function () {
   let v = form.elements["phone"].value.trim();
   if (v.startsWith("+") || v.startsWith("00")) { const d = v.replace(/^00/, "").replace(/\D/g, ""); return d.length >= 8 && d.length <= 15 ? "+" + d : ""; }
   let d = v.replace(/\D/g, "");
@@ -414,19 +414,199 @@ document.querySelectorAll("[data-pick]").forEach((a) => a.addEventListener("clic
 }));
 const done = document.getElementById("bookDone");
 document.getElementById("bookAgain").addEventListener("click", () => { done.hidden = true; form.hidden = false; form.elements["msg"].value = ""; });
-form.addEventListener("submit", (e) => {
+/* ---------- form checks: every field, with a message under the field in the visitor's language ---------- */
+const PAGE_T0 = Date.now();
+// mobile numbers: national number (without country code) and an example, per country
+const MOBILE = {
+  GR: [/^69\d{8}$/, "691 234 5678"], DE: [/^1[5-7]\d{8,9}$/, "151 23456789"], FR: [/^[67]\d{8}$/, "6 12 34 56 78"],
+  IT: [/^3\d{8,9}$/, "312 345 6789"], GB: [/^7\d{9}$/, "7400 123456"], US: [/^[2-9]\d{2}[2-9]\d{6}$/, "201 555 0123"],
+  CA: [/^[2-9]\d{2}[2-9]\d{6}$/, "416 555 0123"], NL: [/^6\d{8}$/, "6 12345678"], BE: [/^4\d{8}$/, "470 12 34 56"],
+  AT: [/^6\d{8,12}$/, "664 1234567"], CH: [/^7[5-9]\d{7}$/, "78 123 45 67"], CY: [/^9\d{7}$/, "96 123456"],
+  IL: [/^5\d{8}$/, "50 123 4567"], ES: [/^[67]\d{8}$/, "612 34 56 78"], PT: [/^9\d{8}$/, "912 345 678"],
+  IE: [/^8\d{8}$/, "85 123 4567"], DK: [/^[2-9]\d{7}$/, "20 12 34 56"], SE: [/^7\d{8}$/, "70 123 45 67"],
+  NO: [/^[49]\d{7}$/, "406 12 345"], FI: [/^(4\d|50)\d{5,8}$/, "41 2345678"], PL: [/^[4-8]\d{8}$/, "512 345 678"],
+  CZ: [/^[67]\d{8}$/, "601 123 456"], SK: [/^9\d{8}$/, "912 123 456"], HU: [/^(20|30|31|50|70)\d{7}$/, "20 123 4567"],
+  RO: [/^7\d{8}$/, "712 034 567"], BG: [/^(8[789]|98|43)\d{7}$/, "87 123 4567"], RS: [/^6\d{7,9}$/, "60 1234567"],
+  HR: [/^9\d{7,8}$/, "92 123 4567"], SI: [/^[3-7]\d{7}$/, "31 234 567"], AL: [/^6\d{8}$/, "66 123 4567"],
+  MK: [/^7\d{7}$/, "72 345 678"], TR: [/^5\d{9}$/, "501 234 56 78"], UA: [/^[3-9]\d{8}$/, "50 123 4567"],
+  RU: [/^9\d{9}$/, "912 345 67 89"], KZ: [/^7\d{9}$/, "771 000 9998"], AU: [/^4\d{8}$/, "412 345 678"],
+  NZ: [/^2\d{7,9}$/, "21 123 4567"], LU: [/^6\d{8}$/, "628 123 456"], MT: [/^[79]\d{7}$/, "9696 1234"],
+  IS: [/^[678]\d{6}$/, "611 1234"], EE: [/^5\d{6,7}$/, "5123 4567"], LV: [/^2\d{7}$/, "21 234 567"],
+  LT: [/^6\d{7}$/, "612 34567"], BR: [/^\d{2}9\d{8}$/, "11 91234 5678"], MX: [/^\d{10}$/, "222 123 4567"],
+  JP: [/^[789]0\d{8}$/, "90 1234 5678"], CN: [/^1\d{10}$/, "131 2345 6789"], IN: [/^[6-9]\d{9}$/, "81234 56789"],
+  AE: [/^5\d{8}$/, "50 123 4567"]
+};
+const dialOf = (iso) => (DIAL.find(([c]) => c === iso) || [, ""])[1];
+const okNSN = (iso, d) => (MOBILE[iso] ? MOBILE[iso][0].test(d) : d.length >= 7 && d.length <= 12);
+// returns { ok, e164, iso } ; also switches the country if the visitor typed +49… or 0049…
+function checkPhone() {
+  const raw = form.elements["phone"].value.trim();
+  if (!raw) return { ok: false, empty: true };
+  let iso = ccSel.value, d;
+  if (/^(\+|00)/.test(raw)) {
+    const all = raw.replace(/^00/, "").replace(/\D/g, "");
+    const cands = DIAL.filter(([, code]) => all.startsWith(code)).sort((a, b) => b[1].length - a[1].length);
+    if (!cands.length) return { ok: false, iso };
+    const code = cands[0][1];
+    const same = cands.filter(([, c]) => c === code).map(([c]) => c);
+    d = all.slice(code.length);
+    iso = same.includes(iso) ? iso : (same.find((c) => okNSN(c, d)) || same[0]);
+    if (iso !== ccSel.value) { ccSel.value = iso; showCC(); }
+  } else {
+    d = raw.replace(/\D/g, "");
+    const code = dialOf(iso);
+    if (!okNSN(iso, d) && code && d.startsWith(code) && okNSN(iso, d.slice(code.length))) d = d.slice(code.length); // typed the country code again
+    if ((iso === "RU" || iso === "KZ") && d.length === 11 && d[0] === "8") d = d.slice(1);
+    else if (iso !== "IT" && d[0] === "0") d = d.replace(/^0+/, "");
+  }
+  return okNSN(iso, d) ? { ok: true, e164: `+${dialOf(iso)} ${d}`, iso } : { ok: false, iso };
+}
+fullPhone = () => { const r = checkPhone(); return r.ok ? r.e164 : ""; };
+// email: format, common typos, and whether the domain can receive mail
+const MAIL_DOMAINS = ["gmail.com", "googlemail.com", "hotmail.com", "outlook.com", "live.com", "yahoo.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "gmx.de", "gmx.net", "gmx.at", "web.de", "t-online.de", "freenet.de", "orange.fr", "free.fr", "wanadoo.fr", "sfr.fr", "laposte.net", "hotmail.fr", "yahoo.fr", "libero.it", "virgilio.it", "tiscali.it", "hotmail.it", "yahoo.it", "alice.it", "otenet.gr", "yahoo.gr", "hotmail.co.uk", "yahoo.co.uk", "btinternet.com", "mail.ru", "yandex.ru", "bluewin.ch", "telenet.be", "ziggo.nl"];
+const lev = (a, b) => { const m = [...Array(b.length + 1).keys()]; for (let i = 1; i <= a.length; i++) { let p = m[0]; m[0] = i; for (let k = 1; k <= b.length; k++) { const t2 = m[k]; m[k] = Math.min(m[k] + 1, m[k - 1] + 1, p + (a[i - 1] === b[k - 1] ? 0 : 1)); p = t2; } } return m[b.length]; };
+const emailFormatOK = (v) => v.length <= 254 && /^[A-Za-z0-9._%+'’-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(v) && !/\.\./.test(v) && !/^\.|\.@|@[.-]/.test(v);
+function emailSuggestion(v) {
+  const [local, dom] = v.toLowerCase().split("@"); if (!dom || MAIL_DOMAINS.includes(dom)) return "";
+  let best = "", bd = 3;
+  MAIL_DOMAINS.forEach((m) => { const dd = lev(dom, m); if (dd < bd) { bd = dd; best = m; } });
+  return best && bd <= 2 ? `${local}@${best}` : "";
+}
+const domCache = {};
+function domainReceivesMail(dom) {
+  if (dom in domCache) return Promise.resolve(domCache[dom]);
+  const q = (type) => fetch(`https://dns.google/resolve?name=${encodeURIComponent(dom)}&type=${type}`).then((r) => r.json());
+  const timeout = new Promise((res) => setTimeout(() => res(null), 3000));
+  return Promise.race([q("MX").then((m) => {
+    if (m.Status === 3) return false;                                   // domain does not exist
+    if (m.Answer && m.Answer.some((a) => a.type === 15)) return true;  // has a mail server
+    return q("A").then((a) => !!(a.Answer && a.Answer.length));
+  }).catch(() => null), timeout]).then((v) => { if (v !== null) domCache[dom] = v; return v; }); // null = could not check: don't block
+}
+let emailSuggestShown = "";
+// messages under the fields
+function fieldOf(key) {
+  return { dates: fin.closest(".row2"), name: form.elements["name"].closest(".fld"), email: form.elements["email"].closest(".fld"),
+    phone: form.elements["phone"].closest(".fld"), guests: fg.closest(".fld"), msg: form.elements["msg"].closest(".fld") }[key];
+}
+function showErr(key, html) {
+  const box = fieldOf(key); if (!box) return;
+  let e = key === "dates" ? box.nextElementSibling : box.querySelector(".fld-err");
+  if (!e || !e.classList || !e.classList.contains("fld-err")) {
+    e = document.createElement("span"); e.className = "fld-err"; e.setAttribute("role", "alert");
+    key === "dates" ? box.after(e) : box.appendChild(e);
+  }
+  e.innerHTML = html; e.hidden = !html;
+  const inp = { dates: null, name: form.elements["name"], email: form.elements["email"], phone: form.elements["phone"], guests: fg, msg: form.elements["msg"] }[key];
+  if (inp) inp.classList.toggle("err", !!html);
+  if (key === "dates") [fin, fout].forEach((f) => f.classList.toggle("err", !!html));
+  if (key === "phone") ccSel.closest(".cc-wrap").classList.toggle("err", !!html);
+}
+const S = (en, el) => `<span>${t(en, el)}</span>`;
+const countryName = (iso) => { try { return new Intl.DisplayNames([curLang()], { type: "region" }).of(iso); } catch (e) { return iso; } };
+const CHECKS = {
+  dates() {
+    if (!fin.value || !fout.value) return S("Please choose your dates", "Επιλέξτε ημερομηνίες");
+    const a = new Date(fin.value + "T12:00:00"), b2 = new Date(fout.value + "T12:00:00"), today = new Date(); today.setHours(0, 0, 0, 0);
+    if (a < today) return S("The arrival date has already passed", "Η ημερομηνία άφιξης έχει ήδη περάσει");
+    if (b2 <= a) return S("Check-out must be after check-in", "Η αναχώρηση πρέπει να είναι μετά την άφιξη");
+    const n = Math.round((b2 - a) / 864e5);
+    if (n > 60) return S("For stays longer than 60 nights, please write to us by email.", "Για διαμονές πάνω από 60 νύχτες, γράψτε μας με email.");
+    const lim = new Date(today); lim.setMonth(lim.getMonth() + 18);
+    if (a > lim) return S("We accept requests up to 18 months ahead.", "Δεχόμαστε αιτήματα έως 18 μήνες μπροστά.");
+    if (window.SOFIA_BUSY) {
+      const busy = window.SOFIA_BUSY(form.elements["apt"].value), d = new Date(a);
+      for (; d < b2; d.setDate(d.getDate() + 1)) {
+        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (busy.has(k)) return S("Some of these nights are already booked. Please choose other dates.", "Κάποιες από αυτές τις νύχτες είναι ήδη κλεισμένες. Επιλέξτε άλλες ημερομηνίες.");
+      }
+    }
+    return "";
+  },
+  guests() {
+    const v = +fg.value, max = maxFor();
+    if (!Number.isInteger(v) || v < 1 || v > max) return `${S("Number of guests for this choice: 1 to", "Άτομα για αυτή την επιλογή: 1 έως")} <b>${max}</b>`;
+    return "";
+  },
+  name() {
+    const v = form.elements["name"].value.trim();
+    if (!v) return S("Please write your name", "Γράψτε το όνομά σας");
+    const letters = (v.match(/\p{L}/gu) || []).length;
+    if (letters < 2 || v.length > 60 || /[@<>]|https?:|www\.|\d{3,}/i.test(v)) return S("Please write your real name (letters only).", "Γράψτε το πραγματικό σας όνομα (μόνο γράμματα).");
+    return "";
+  },
+  email() {
+    const v = form.elements["email"].value.trim();
+    if (!v) return S("Please write your email address", "Γράψτε τη διεύθυνση email σας");
+    if (!emailFormatOK(v)) return S("Please check your email address", "Ελέγξτε τη διεύθυνση email");
+    const sug = emailSuggestion(v);
+    if (sug && emailSuggestShown !== v) {
+      emailSuggestShown = v;
+      return `${S("Did you mean", "Μήπως εννοούσατε")} <button type="button" class="sug" data-sug="${sug.replace(/"/g, "")}">${sug}</button>? ${S("If your address is correct, just send again.", "Αν η διεύθυνσή σας είναι σωστή, πατήστε ξανά αποστολή.")}`;
+    }
+    return "";
+  },
+  phone() {
+    const r = checkPhone();
+    if (r.empty) return S("Please enter your mobile number", "Γράψτε τον αριθμό του κινητού σας");
+    if (!r.ok) {
+      const iso = r.iso || ccSel.value, ex = MOBILE[iso] ? MOBILE[iso][1] : "";
+      return `${S("This mobile number doesn't look right for", "Ο αριθμός κινητού δεν φαίνεται σωστός για")} <b>${countryName(iso)} (+${dialOf(iso)})</b>.` + (ex ? ` ${S("Example:", "Παράδειγμα:")} <b>+${dialOf(iso)} ${ex}</b>` : "");
+    }
+    return "";
+  },
+  msg() {
+    return form.elements["msg"].value.length > 1500 ? S("Your message is too long (up to 1500 characters).", "Το μήνυμα είναι πολύ μεγάλο (έως 1500 χαρακτήρες).") : "";
+  }
+};
+// "Did you mean …?": keep focus where it is while pressing the suggestion, then apply it
+["mousedown", "pointerdown"].forEach((ev) => form.addEventListener(ev, (e) => { if (e.target.closest(".sug")) e.preventDefault(); }));
+form.addEventListener("click", (e) => {
+  const b = e.target.closest(".sug"); if (!b) return;
+  form.elements["email"].value = b.dataset.sug; emailSuggestShown = ""; showErr("email", "");
+});
+// clear a message as soon as the field is corrected; check phone and email when leaving the field
+[["name", "name"], ["email", "email"], ["phone", "phone"], ["msg", "msg"]].forEach(([f, k]) => {
+  form.elements[f].addEventListener("input", () => { const box = fieldOf(k); const e = box && box.querySelector(".fld-err"); if (e && !e.hidden && !CHECKS[k]()) showErr(k, ""); });
+});
+// pressing "Send" must not move the button under the finger: skip the on-leave checks then (Send checks everything)
+let pressingSend = 0;
+form.querySelector(".submit").addEventListener("pointerdown", () => { pressingSend = Date.now(); });
+const leavingToSend = () => Date.now() - pressingSend < 1500;
+form.elements["phone"].addEventListener("blur", () => { if (!leavingToSend() && form.elements["phone"].value.trim()) showErr("phone", CHECKS.phone()); });
+ccSel.addEventListener("change", () => { if (form.elements["phone"].value.trim()) showErr("phone", CHECKS.phone()); });
+form.elements["email"].addEventListener("blur", () => {
+  const v = form.elements["email"].value.trim(), box = fieldOf("email");
+  if (!v || leavingToSend() || (box && box.querySelector(".fld-err:not([hidden]) .sug"))) return;   // leave a "Did you mean" message in place
+  showErr("email", emailFormatOK(v) ? "" : CHECKS.email());
+});
+[fin, fout].forEach((f) => f.addEventListener("change", () => { const box = fieldOf("dates"); const e = box && box.nextElementSibling; if (e && e.classList.contains("fld-err") && !e.hidden) showErr("dates", CHECKS.dates()); }));
+form.querySelectorAll('input[name="apt"]').forEach((r) => r.addEventListener("change", () => setTimeout(() => { const box = fieldOf("dates"); const e = box && box.nextElementSibling; if (e && e.classList.contains("fld-err") && !e.hidden) showErr("dates", CHECKS.dates()); }, 0)));
+form.elements["msg"].setAttribute("maxlength", "1500"); form.elements["name"].setAttribute("maxlength", "60"); form.elements["email"].setAttribute("maxlength", "254"); form.elements["phone"].setAttribute("maxlength", "24");
+
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const fe = form.elements, name = fe["name"].value.trim(), email = fe["email"].value.trim(), phone = fullPhone(), msg = fe["msg"].value.trim();
-  const okMail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-  [fin, fout].forEach((f) => f.classList.toggle("err", !f.value));
-  fe["name"].classList.toggle("err", !name); fe["email"].classList.toggle("err", !okMail);
-  const n = nights();
-  if (!fin.value || !fout.value || n <= 0) { toast(t("Please choose your dates", "Επιλέξτε ημερομηνίες")); return; }
-  if (!name) { toast(t("Please write your name", "Γράψτε το όνομά σας")); fe["name"].focus(); return; }
-  if (!okMail) { toast(t("Please check your email address", "Ελέγξτε τη διεύθυνση email")); fe["email"].focus(); return; }
-  fe["phone"].classList.toggle("err", !phone);
-  if (!phone) { toast(t("Please enter your mobile number", "Γράψτε τον αριθμό του κινητού σας")); fe["phone"].focus(); return; }
-  if (fe["_honey"].value) return;
+  if (form.querySelector(".submit").disabled) return;
+  const order = ["dates", "guests", "name", "email", "phone", "msg"];
+  let first = null;
+  order.forEach((k) => { const m = CHECKS[k](); showErr(k, m); if (m && !first) first = k; });
+  const fe = form.elements;
+  if (!first) {   // the email domain must exist and receive mail (checked online; never blocks if the check itself fails)
+    const dom = fe["email"].value.trim().split("@")[1].toLowerCase();
+    const btn0 = form.querySelector(".submit"); btn0.classList.add("busy");
+    const okDom = await domainReceivesMail(dom); btn0.classList.remove("busy");
+    if (okDom === false) { showErr("email", S("This email address does not seem to exist. Please check it.", "Αυτή η διεύθυνση email δεν φαίνεται να υπάρχει. Ελέγξτε την.")); first = "email"; }
+  }
+  if (first) {
+    const box = fieldOf(first), msgEl = first === "dates" ? box.nextElementSibling : box.querySelector(".fld-err");
+    toast(msgEl ? msgEl.textContent.trim() : t("Please check the form", "Ελέγξτε τη φόρμα"));
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    const inp = { dates: fin, guests: fg, name: fe["name"], email: fe["email"], phone: fe["phone"], msg: fe["msg"] }[first];
+    if (inp && first !== "dates") setTimeout(() => inp.focus({ preventScroll: true }), 300);
+    return;
+  }
+  if (fe["_honey"].value || Date.now() - PAGE_T0 < 3000) return;   // bots
+  const name = fe["name"].value.trim(), email = fe["email"].value.trim(), phone = checkPhone().e164, msg = fe["msg"].value.trim(), n = nights();
   const apt = fe["apt"].value;
   const fmt = (v) => new Date(v).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
   const langName = { en: "English", el: "Greek", de: "German", fr: "French", it: "Italian" }[curLang()] || curLang();
@@ -921,6 +1101,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   let data = null, view = new Date(T0.getFullYear(), T0.getMonth(), 1), selA = null, selB = null;
 
   // booked nights per apartment, as a Set of "YYYY-MM-DD"
+  window.SOFIA_BUSY = (apt) => nightsOf(apt);   // used by the form check
   const nightsOf = (apt) => {
     const out = new Set(); if (!data) return out;
     const keys = apt === "Sofia 164" ? ["164"] : apt === "Sofia 264" ? ["264"] : ["164", "264"];

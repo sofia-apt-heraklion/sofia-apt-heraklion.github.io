@@ -950,3 +950,11 @@ h1,h2,h3,h4{overflow-wrap:break-word}
 html.map-in-view .totop{opacity:0!important;pointer-events:none!important}
 /* very small phones: less inner padding around the calendar so each day is bigger */
 @media (max-width:400px){.bform{padding:12px}.cal{padding:10px 4px 8px}.cal-g{gap:1px}}
+
+/* ===== form messages under the fields ===== */
+.fld-err{display:block;margin-top:2px;font:500 .82rem/1.45 var(--sans);color:#a8432c}
+.fld-err[hidden]{display:none}
+.fld-err b{font-weight:600;color:#7d2f1e}
+.row2+.fld-err{margin:-6px 0 12px}
+.fld-err .sug{border:0;background:#f6e6dc;color:#7d2f1e;font:600 .82rem var(--sans);padding:3px 8px;border-radius:8px;cursor:pointer;text-decoration:underline}
+.bform input.err,.bform textarea.err,.bform .stepper:has(input.err){border-color:#c0533a}
